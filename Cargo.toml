@@ -1,0 +1,32 @@
+[package]
+name = "mruwyy"
+version = "0.1.0"
+authors = ["Initsnow"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
+
+[dependencies]
+
+dioxus = { version = "0.5", features = ["desktop", "router"] }
+
+# Debug
+tracing = "0.1.40"
+dioxus-logger = "0.5.0"
+
+#manganis = "0.2.2"
+#ncm-api = { git = "https://github.com/Initsnow/netease-cloud-music-api", package = "netease-cloud-music-api" }
+ncm-api = { path = 'E:\Projects\Rust\netease-cloud-music-api', package = "netease-cloud-music-api" }
+tokio = "1.38.0"
+chrono = "0.4.38"
+qrcode-generator = "4.1.9"
+lazy_static = "1.4.0"
+isahc = "1.7.2"
+cookie_store = "0.21.0"
+rodio = "0.18.1"
+futures-util = "0.3.30"
+reqwest = { version = "0.12.4", features = ["stream"] }
