@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use lib::api;
 use std::sync::{RwLock};
@@ -55,6 +54,7 @@ enum PlayMode {
 #[derive(Clone)]
 struct Play {
     play_current_id: Option<u64>,
+    play_flag: bool,
     play_list: Option<Vec<SongInfo>>,
     mode: PlayMode,
     preload_limit: usize,
@@ -76,6 +76,7 @@ fn App() -> Element {
         Signal::new(RwLock::new(Play {
             play_current_id: None,
             play_list: None,
+            play_flag:false,
             mode: PlayMode::Normal,
             preload_limit: 1,
         }))

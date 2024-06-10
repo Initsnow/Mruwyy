@@ -15,17 +15,16 @@ use tokio::time::sleep;
 use crate::{Play, PlayMode};
 
 pub enum PlayAction {
-    Start,
-    Next,
-    Pause,
-    Stop,
+    Start(),
+    Next(),
+    Pause(),
+    Stop(),
 }
 
 pub enum Timer {
-    Start,
-    Pause,
-    Stop,
-    Set(usize),
+    Start(),
+    Pause(),
+    Stop(),
 }
 
 #[component]
@@ -56,18 +55,15 @@ pub fn PlayBar() -> Element {
 
             while let Some(msg) = rx.next().await {
                 match msg {
-                    Timer::Start => {
+                    Timer::Start() => {
                         *flag.lock().unwrap() = true;
                     }
-                    Timer::Stop => {
+                    Timer::Stop() => {
                         *flag.lock().unwrap() = false;
                         time.write().0 = 0;
                     }
-                    Timer::Pause => {
+                    Timer::Pause() => {
                         *flag.lock().unwrap() = false;
-                    }
-                    Timer::Set(t)=>{
-                        time.write().0 = t;
                     }
                 }
             }
@@ -82,20 +78,18 @@ pub fn PlayBar() -> Element {
         async move {
             while let Some(msg) = rx.next().await {
                 match msg {
-                    PlayAction::Start => {
+                    PlayAction::Start() => {
                         handle_play_action_start(playdata.clone(), player_clone.clone(), timer_coroutine_handle.clone()).await;
                     }
-                    PlayAction::Pause => {
-                        player_clone.write().unwrap().pause();
+                    PlayAction::Pause() => {
+                        player_clone.read().unwrap().pause();
                         update_play_flag(playdata.clone(), false).await;
-                        timer_coroutine_handle.clone().send(Timer::Pause);
                     }
-                    PlayAction::Stop => {
-                        player_clone.write().unwrap().stop();
+                    PlayAction::Stop() => {
+                        player_clone.read().unwrap().stop();
                         update_play_flag(playdata.clone(), false).await;
-                        timer_coroutine_handle.clone().send(Timer::Stop);
                     }
-                    PlayAction::Next => {
+                    PlayAction::Next() => {
                         handle_play_action_next(playdata.clone(), player_clone.clone(), timer_coroutine_handle.clone()).await;
                     }
                 }
@@ -104,7 +98,7 @@ pub fn PlayBar() -> Element {
             loop {
                 if playdata.read().read().unwrap().play_flag {
                     if player_clone.read().unwrap().empty() {
-                        use_coroutine_handle::<PlayAction>().send(PlayAction::Next);
+                        use_coroutine_handle::<PlayAction>().send(PlayAction::Next());
                     } else {
                         dbg!(time.read());
                     }
@@ -137,8 +131,7 @@ pub fn PlayBar() -> Element {
                     value: "{time.read().0}",
                     oninput: move |e| {
                         // player_clone3.write().unwrap().set_time(e.value().parse().unwrap());
-                        // dbg!(e.value());
-                        use_coroutine_handle::<Timer>().send(Timer::Set(e.value().parse().unwrap()));
+                        dbg!(e.value());
                     }
                 }
                 div { class: "time", "" }
@@ -149,9 +142,9 @@ pub fn PlayBar() -> Element {
                         Link { class: "singer", to: Route::SingerDetail { singer_name: singer.clone() }, "{singer}" }
                     }
                     div { class: "control",
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause), "pause" }
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Stop), "stop" }
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next), "next" }
+                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause()), "pause" }
+                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Stop()), "stop" }
+                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next()), "next" }
                     }
                 }
             }
@@ -166,30 +159,20 @@ async fn handle_play_action_start(
     player: Arc<RwLock<Player>>,
     timer_coroutine_handle: Coroutine<Timer>,
 ) {
-
-        let currentid;
-        {
-            let play = playdata.read().read().unwrap().to_owned();
-            if let Play {
-                play_current_id: Some(id),
-                ..
-            } = play
-            {
-                currentid = id;
-            } else {
-                return; // Exit early if play_current_id is None
-            }
-        }
+    if let Play {
+        play_current_id: Some(currentid),
+        ..
+    } = playdata.read().read().unwrap().to_owned()
+    {
         if check_cache(currentid) {
             player.write().unwrap().restart(currentid);
-            timer_coroutine_handle.send(Timer::Stop);
-            timer_coroutine_handle.send(Timer::Start);
+            timer_coroutine_handle.send(Timer::Start());
             update_play_flag(playdata.clone(), true).await;
         } else {
             match download(currentid).await {
                 Ok(_) => {
                     player.write().unwrap().restart(currentid);
-                    timer_coroutine_handle.send(Timer::Start);
+                    timer_coroutine_handle.send(Timer::Start());
                     update_play_flag(playdata.clone(), true).await;
                     preload(playdata.clone()).await;
                 }
@@ -199,7 +182,7 @@ async fn handle_play_action_start(
             }
         }
     }
-
+}
 
 async fn handle_play_action_next(
     playdata: Signal<RwLock<crate::Play>>,
@@ -221,8 +204,7 @@ async fn handle_play_action_next(
                     return;
                 }
                 let id = playlist[index];
-                update_current_id(playdata.clone(), id).await
-                ;
+                update_current_id(playdata.clone(), id).await;
                 handle_play_action_start(playdata.clone(), player.clone(), timer_coroutine_handle.clone()).await;
             }
             PlayMode::Shuffle => {}

@@ -40,7 +40,7 @@ h4 {
 }
 
 #sidebar {
-    max-width: 12.5rem;
+    max-width: 11.5rem;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -74,7 +74,7 @@ li a img {
 
 li a:hover,
 #sidebar #search button:hover,
-#sidebar > button[dioxus-prevent-default="onclick"]:hover {
+#sidebar>button[dioxus-prevent-default="onclick"]:hover {
     color: black;
     backdrop-filter: opacity(0.35);
     background: #ffffff57;
@@ -83,14 +83,14 @@ li a:hover,
     transition: all 0.15s;
 }
 
-.acrylic {
+/* .acrylic {
     backdrop-filter: blur(1.875rem) brightness(120%) saturate(80%);
     background-color: #00000050;
     background-image: url(data:image/png;base64,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);
     background-size: 3.125rem;
-}
+} */
 
-#sidebar > button[dioxus-prevent-default="onclick"] {
+#sidebar>button[dioxus-prevent-default="onclick"] {
     width: fit-content;
     padding: 0;
     margin-left: 1rem;
@@ -145,7 +145,7 @@ form input:focus-visible {
 #content {
     flex: 1;
     padding: 1rem;
-    padding-bottom: 4rem;
+    padding-bottom: 4.4rem;
     overflow-y: auto;
 }
 
@@ -234,6 +234,7 @@ a:hover {
 }
 
 @keyframes color {
+
     100%,
     0% {
         stroke: #d62d20;
@@ -270,12 +271,14 @@ body {
 #user_info_container {
     display: flex;
 }
+
 #user_info_container {
     margin: 1rem;
     margin-bottom: 0;
     position: relative;
     height: 10rem;
 }
+
 #user_info_container #background {
     content: "";
     position: absolute;
@@ -286,14 +289,17 @@ body {
     background-size: cover !important;
     filter: opacity(80%) blur(30px) brightness(65%);
 }
+
 #user_info_container *:not(#background) {
     z-index: 1;
 }
+
 #playlist_info_container img,
 #album_info_container img {
     width: 10rem;
     height: 10rem;
 }
+
 #user_info_container img.avatar {
     width: 8rem;
     height: 8rem;
@@ -329,6 +335,7 @@ body {
     -webkit-user-select: none;
     user-select: none;
 }
+
 .track:hover {
     transition: all 0.3s;
     background: #323232;
@@ -442,6 +449,7 @@ button {
     /*height: calc(100vh - 13rem);*/
     height: 100vh;
 }
+
 #user_list_container .userlist {
     background-size: 2rem;
     padding: 0.4rem;
@@ -455,31 +463,37 @@ button {
     flex-direction: column;
     overflow-x: hidden;
 }
+
 .userlist a,
 .userlist h1 {
     padding: 0.15rem 0.4rem;
 }
+
 #user_list_container .userlist .song_cover {
     width: 3rem;
     height: 3rem;
 }
-#content:has(#user_info_container) {
+
+/* #content:has(#user_info_container) {
     padding-bottom: 0;
-}
+} */
 .userlist h1 {
     margin-bottom: 0.5rem;
 }
+
 .userlist .item {
     gap: 0.4rem;
     display: flex;
     align-items: center;
 }
+
 .list_info * {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
     overflow: hidden;
 }
+
 .list_info .list_author {
     font-size: 11px;
     opacity: 0.68;
@@ -494,27 +508,35 @@ button {
     text-decoration: none;
     transition: all 0.3s;
 }
-#playbar{
-    padding: 0.5rem;
-    padding-left: 1rem;
+
+#playbar {
     position: fixed;
+    margin-right: 0.25rem;
     bottom: 0;
     right: 0;
     left: 0;
     display: flex;
-    backdrop-filter: blur(1rem);
-    margin-right: 4px;
+    backdrop-filter: saturate(180%) blur(30px);
     background-size: 31px;
+    height: 4.1rem;
+    flex-direction: column;
+}
+
+#playbar .container {
+    padding: 0.5rem;
+    padding-left: 1rem;
+    margin-right: 4px;
     gap: 0.5rem;
+    display: flex;
     align-items: center;
 }
 
-#playbar .song_cover{
+#playbar .song_cover {
     width: 2.8rem;
     height: 2.8rem;
 }
 
-#playbar .singer{
+#playbar .singer {
     font-size: small;
     opacity: 0.78;
     color: var(--color-text);
@@ -523,6 +545,41 @@ button {
     -webkit-line-clamp: 1;
     overflow: hidden;
 }
+
 #playbar .title\&singer {
     flex-direction: column;
+    flex: unset;
 }
+
+#playbar .control {
+    display: flex;
+
+}
+
+[type="range"] {
+
+    margin: 0;
+    outline: 0;
+    background-color: transparent;
+    width: 100%;
+    height: 0.25rem;
+}
+/* [type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: #eee;
+}
+[type="range" i]::-webkit-slider-container {
+    height: 2px;
+    
+}
+[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #f44336;
+    border: 1px solid transparent;
+    margin-top: -8px;
+    border-image: linear-gradient(#f44336,#f44336) 0 fill / 8 15 8 0 / 0px 0px 0 2000px;
+} */

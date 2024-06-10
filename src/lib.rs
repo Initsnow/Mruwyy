@@ -14,7 +14,7 @@ pub mod api {
     use dioxus_logger::tracing::{error, instrument};
     use lazy_static::lazy_static;
     pub use ncm_api::*;
-    
+
     use std::{fs, io};
     const BASE_URL_LIST: [&str; 12] = [
         "https://music.163.com/",
@@ -36,7 +36,7 @@ pub mod api {
         pub static ref CLIENT: MusicApi = client_init();
     }
 
-    fn client_init() ->MusicApi {
+    fn client_init() -> MusicApi {
         if let Some(cookiejar) = load_cookie_jar_from_file() {
             return MusicApi::from_cookie_jar(cookiejar, MAX_CONS);
         }
@@ -101,33 +101,51 @@ pub mod api {
 }
 
 pub mod play {
-    use crate::api;
-    use futures_util::StreamExt;
+    
+    use std::sync::Mutex;
     use rodio::{Decoder, OutputStream, Sink};
-    use std::path::Path;
+    
+
+    use std::sync::atomic::{AtomicBool};
+    use std::sync::Arc;
     
     use std::{fs::File, io::BufReader};
 
     pub struct Player {
         sink: Sink,
         _stream: OutputStream,
+        pub current_total_time: u64,
     }
-
+    
     impl Player {
         pub fn new() -> Self {
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let sink = Sink::try_new(&stream_handle).unwrap();
-            Self { sink, _stream }
+            let stop_timer_signal = Arc::new(AtomicBool::new(false));
+            Self {
+                sink,
+                _stream,
+                current_total_time:0,
+            }
         }
-
-        pub fn restart(&self, id: u64) {
+    
+        pub fn restart(&mut self, id: u64) {
             let file = File::open(format!("cache/{}", id)).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
+            let total_duration = rodio::Source::total_duration(&source).unwrap().as_secs();
+            self.current_total_time = total_duration;
             self.sink.stop();
             self.sink.append(source);
-            self.sink.set_volume(0.3);
-        }
+    
 
+    
+            self.sink.set_volume(0.3);
+            self.play();
+        }
+    
+    pub fn get_total_duration(){
+        
+    }
         pub fn append(&self, id: u64) {
             // let file = File::open(path).unwrap();
             // let source = Decoder::new(BufReader::new(file)).unwrap();
@@ -155,33 +173,9 @@ pub mod play {
         pub fn set_volume(&self, volume: f32) {
             self.sink.set_volume(volume);
         }
-    }
 
-    fn check_cache(id: u64) -> bool {
-        dbg!(Path::new(format!("cache/{}", id).as_str()));
-        if Path::new(format!("cache/{}", id).as_str()).exists() == true {
-            dbg!("存在");
-            true
-        } else {
-            dbg!("缓存不存在，开始下载");
-            false
+        pub fn empty(&self) -> bool {
+            self.sink.empty()
         }
-    }
-    async fn download(id: u64) -> Result<(), Box<dyn std::error::Error>> {
-        dbg!("开始下载");
-        let api = &api::CLIENT;
-        dbg!("获取到api");
-        let url = api.songs_url(&[id], "12800").await.unwrap()[0]
-            .url
-            .to_owned();
-        dbg!(&url);
-        let response = reqwest::get(url).await?;
-        let mut file = File::create(format!("cache/{}", id))?;
-        let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            std::io::Write::write_all(&mut file, &chunk)?;
-        }
-        Ok(())
     }
 }

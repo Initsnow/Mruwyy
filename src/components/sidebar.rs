@@ -10,7 +10,7 @@ pub fn Sidebar() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
     rsx! {
         div { id: "sidebar",
-        "style":if playdata.read().read().unwrap().play_current_id.is_some() {"height: calc(100% - 3.8rem);"},
+        "style":if playdata.read().read().unwrap().play_current_id.is_some() {"height: calc(100% - 4.1rem);"},
             class: "acrylic",
         GoBackButton { img {src: "./assets/icons/chevron_backward.svg", alt: "chevron_backward"} }
         form { id: "search",
