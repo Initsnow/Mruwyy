@@ -25,7 +25,7 @@ pub enum Timer {
     Start,
     Pause,
     Stop,
-    Set(usize),
+    Set(u64),
 }
 
 #[component]
@@ -34,8 +34,8 @@ pub fn PlayBar() -> Element {
     let player = Arc::new(RwLock::new(Player::new()));
     let time = use_signal_sync(|| (0, 0));
     
-    let timer_coroutine_handle = use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
-        let mut time = time.clone();
+    let timer_coroutine_handle: Coroutine<Timer> = use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
+        let mut time: Signal<(u64, u64), SyncStorage> = time.clone();
         let player = player.clone();
         let flag = Arc::new(Mutex::new(false));
         let flag1 = flag.clone();
@@ -127,6 +127,7 @@ pub fn PlayBar() -> Element {
         } = s;
 
         let time = time.clone();
+        // dbg!(time.read().0 as f32/time.read().1 as f32 * 100.0);
         rsx! {
             Outlet::<crate::Route> {}
             div { id: "playbar", class: "acrylic",
@@ -141,7 +142,9 @@ pub fn PlayBar() -> Element {
                         use_coroutine_handle::<Timer>().send(Timer::Set(e.value().parse().unwrap()));
                     }
                 }
-                div { class: "time", "" }
+                if time.read().1 != 0 {
+                    div { class: "time",left:"{time.read().0 as f32/time.read().1 as f32 * 100.0}%", "{time.read().0/60}:{time.read().0%60:02}" }
+                }
                 div { class: "container",
                     img { class: "song_cover", src: "{pic_url}" }
                     div { class: "title&singer",
