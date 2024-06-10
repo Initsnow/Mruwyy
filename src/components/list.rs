@@ -236,6 +236,9 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                             h2 { "{track.name}" }
                             Link {
                                 class: "singer",
+                                onclick: move |event:MouseEvent| {
+                                    event.stop_propagation();
+                                },
                                 to: Route::SingerDetail { singer_name: track.singer.clone() },
                                 "{track.singer}"
                             }
@@ -244,6 +247,9 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                     div {
                         class: "album",
                         Link {
+                            onclick: move |event:MouseEvent| {
+                                event.stop_propagation();
+                            },
                             to: Route::AlbumDetail { album_id: track.album_id },
                             "{track.album}"
                         }

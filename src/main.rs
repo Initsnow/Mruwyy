@@ -44,7 +44,7 @@ struct Status {
     login: Option<AccountInfo>,
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 enum PlayMode {
     Normal,
     Shuffle,

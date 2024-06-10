@@ -201,18 +201,31 @@ async fn handle_play_action_start(
     }
 
 
-async fn handle_play_action_next(
-    playdata: Signal<RwLock<crate::Play>>,
-    player: Arc<RwLock<Player>>,
-    timer_coroutine_handle: Coroutine<Timer>,
-) {
-    if let Play {
-        play_current_id: Some(currentid),
-        play_list: Some(tracks),
-        mode: playmode,
-        ..
-    } = playdata.read().read().unwrap().to_owned()
-    {
+    async fn handle_play_action_next(
+        playdata: Signal<RwLock<crate::Play>>,
+        player: Arc<RwLock<Player>>,
+        timer_coroutine_handle: Coroutine<Timer>,
+    ) {
+        let currentid;
+        let tracks;
+        let playmode;
+        {
+            let play = playdata.read().read().unwrap().to_owned();
+            if let Play {
+                play_current_id: Some(current),
+                play_list: Some(tracklist),
+                mode,
+                ..
+            } = play
+            {
+                currentid = current;
+                tracks = tracklist;
+                playmode = mode;
+            } else {
+                return; // Exit early if any of the required fields are None
+            }
+        }
+    
         let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
         match playmode {
             PlayMode::Normal => {
@@ -221,15 +234,19 @@ async fn handle_play_action_next(
                     return;
                 }
                 let id = playlist[index];
-                update_current_id(playdata.clone(), id).await
-                ;
+                dbg!(id);
+                update_current_id(playdata.clone(), id).await;
                 handle_play_action_start(playdata.clone(), player.clone(), timer_coroutine_handle.clone()).await;
             }
-            PlayMode::Shuffle => {}
-            _ => {}
+            PlayMode::Shuffle => {
+                // Implement Shuffle mode handling if needed
+            }
+            _ => {
+                // Handle other play modes if needed
+            }
         }
     }
-}
+    
 
 fn check_cache(id: u64) -> bool {
     Path::new(&format!("cache/{}", id)).exists()
