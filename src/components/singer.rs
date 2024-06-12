@@ -19,7 +19,7 @@ pub fn SingerDetail(singer_name: String) -> Element {
             let api = &api::CLIENT;
             let singerinfo = api.search_singer(singer_name.to_string(), 0, 1).await?[0].clone();
             dbg!(&singerinfo.id);
-            let songs = api.singer_top_songs(singerinfo.id).await?;
+            let songs = api.singer_songs(singerinfo.id).await?;
             let ids: &Vec<u64> = &songs.iter().map(|e| e.id).collect();
             let songs = api.songs_detail(ids).await?;
             Ok((singerinfo, songs))

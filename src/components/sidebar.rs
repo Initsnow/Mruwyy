@@ -1,5 +1,5 @@
 use std::sync::RwLock;
-
+use crate::components::icons::Icon;
 use crate::Route;
 use crate::Status;
 use dioxus::prelude::*;
@@ -12,7 +12,7 @@ pub fn Sidebar() -> Element {
         div { id: "sidebar",
         "style":if playdata.read().read().unwrap().play_current_id.is_some() {"height: calc(100% - 4.1rem);"},
             class: "acrylic",
-        GoBackButton { img {src: "./assets/icons/chevron_backward.svg", alt: "chevron_backward"} }
+        GoBackButton {Icon{name:"chevron_backward"}}
         form { id: "search",
             input {
                 placeholder: "Search...",
@@ -21,7 +21,8 @@ pub fn Sidebar() -> Element {
                 class: "acrylic"
             }
             button { r#type: "submit",
-                img { alt: "Search", src: "./assets/icons/search.svg" }
+                alt: "搜索",
+                Icon{name:"search"}
             }
         }
         nav {
@@ -29,28 +30,25 @@ pub fn Sidebar() -> Element {
             ul {
                 li {
                     Link { to: Route::Home {},
-                        img { alt: "home", src: "./assets/icons/home.svg" }
+                        Icon{name:"home"}
                         "主页"
                     }
                 }
                 li {
                     Link { to: "/woc/dad",
-                        img {
-                            src: "./assets/icons/calendar_today.svg",
-                            alt: "calendar_today"
-                        }
+                        Icon{name:"calendar_today"}
                         "每日推荐"
                     }
                 }
                 li {
                     a { href: "contact.html",
-                        img { alt: "radio", src: "./assets/icons/radio.svg" }
+                        Icon{name:"radio"}
                         "私人FM"
                     }
                 }
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/vital_sign.svg", alt: "vital_sign" }
+                        Icon{name:"vital_sign"}
                         "心动模式"
                     }
                 }
@@ -59,25 +57,25 @@ pub fn Sidebar() -> Element {
             ul {
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/folder.svg", alt: "folder" }
+                        Icon{name:"folder"}
                         "离线音乐"
                     }
                 }
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/history.svg", alt: "history" }
+                        Icon{name:"history"}
                         "播放历史"
                     }
                 }
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/star.svg", alt: "star" }
+                        Icon{name:"star"}
                         "我的收藏"
                     }
                 }
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/cloud.svg", alt: "cloud" }
+                        Icon{name:"cloud"}
                         "我的云盘"
                     }
                 }
@@ -86,25 +84,25 @@ pub fn Sidebar() -> Element {
             ul {
                 li {
                     a { href: "",
-                        img { alt: "add", src: "./assets/icons/add.svg" }
+                        Icon{name:"add"}
                         "创建歌单"
                     }
                 }
                 li {
                     a { href: "",
-                        img { src: "./assets/icons/favorite.svg", alt: "favorite" }
+                        Icon{name:"favorite"}
                         "我喜欢的音乐"
                     }
                 }
                 li {
                     a { href: "",
-                        img { alt: "list", src: "./assets/icons/list.svg" }
+                        Icon{name:"list"}
                         "我创建的歌单"
                     }
                 }
                 li {
                     a { href: "",
-                        img { alt: "list", src: "./assets/icons/list.svg" }
+                        Icon{name:"list"}
                         "我收藏的歌单"
                     }
                 }
@@ -119,14 +117,14 @@ pub fn Sidebar() -> Element {
                                     }
                 }else{
                 Link { to: Route::Login{},
-                    img { alt: "logout", src: "./assets/icons/account_circle.svg" }
+                    Icon{name:"account_circle"}
                     "账户"
                 }
                 }
             }
             li {
                 a { href: "",
-                    img { alt: "settings", src: "./assets/icons/settings.svg" }
+                    Icon{name:"settings"}
                     "设置"
                 }
             }

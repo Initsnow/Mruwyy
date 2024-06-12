@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use lib::api::{self, save_cookie_jar_to_file};
 use qrcode_generator;
 use std::error::Error;
-use std::sync::{RwLock};
+use std::sync::RwLock;
 use std::time::Duration;
 
 #[component]

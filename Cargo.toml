@@ -19,7 +19,7 @@ tracing = "0.1.40"
 dioxus-logger = "0.5.0"
 
 #manganis = "0.2.2"
-#ncm-api = { git = "https://github.com/Initsnow/netease-cloud-music-api", package = "netease-cloud-music-api" }
+# ncm-api = { git = "https://github.com/Initsnow/netease-cloud-music-api", package = "netease-cloud-music-api" }
 ncm-api = { path = 'E:\Projects\Rust\netease-cloud-music-api', package = "netease-cloud-music-api" }
 tokio = "1.38.0"
 chrono = "0.4.38"
@@ -30,3 +30,4 @@ cookie_store = "0.21.0"
 rodio = "0.18.1"
 futures-util = "0.3.30"
 reqwest = { version = "0.12.4", features = ["stream"] }
+rand = "0.8.5"

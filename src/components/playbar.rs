@@ -4,21 +4,27 @@ use futures_util::StreamExt;
 use lib::api;
 use lib::play::Player;
 use ncm_api::SongInfo;
+use rand::Rng;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::time::sleep;
+use crate::components::icons::Icon;
 
 use crate::{Play, PlayMode};
 
 pub enum PlayAction {
     Start,
     Next,
+    Previous,
     Pause,
+    Resume,
     Stop,
+    SetVolume(f32),
 }
 
 pub enum Timer {
@@ -26,6 +32,7 @@ pub enum Timer {
     Pause,
     Stop,
     Set(u64),
+    SetTime(u64),
 }
 
 #[component]
@@ -33,91 +40,157 @@ pub fn PlayBar() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
     let player = Arc::new(RwLock::new(Player::new()));
     let time = use_signal_sync(|| (0, 0));
-    
-    let timer_coroutine_handle: Coroutine<Timer> = use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
-        let mut time: Signal<(u64, u64), SyncStorage> = time.clone();
-        let player = player.clone();
-        let flag = Arc::new(Mutex::new(false));
-        let flag1 = flag.clone();
+    let timer_coroutine_handle: Coroutine<Timer> =
+        use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
+            let mut time: Signal<(u64, u64), SyncStorage> = time.clone();
+            let player = player.clone();
+            let flag = Arc::new(Mutex::new(false));
+            let flag1 = flag.clone();
+            let player_clone = player.clone();
+            async move {
+                spawn(async move {
+                    let mut time = time.to_owned();
+                    loop {
+                        if *flag1.lock().unwrap() {
+                            time.write().1 = player.read().unwrap().current_total_time;
+                            time.write().0 += 1;
+                            sleep(Duration::from_secs(1)).await;
+                        } else {
+                            sleep(Duration::from_secs_f32(0.5)).await;
+                        }
+                    }
+                });
+
+                while let Some(msg) = rx.next().await {
+                    match msg {
+                        Timer::Start => {
+                            *flag.lock().unwrap() = true;
+                        }
+                        Timer::Stop => {
+                            *flag.lock().unwrap() = false;
+                            time.write().0 = 0;
+                        }
+                        Timer::Pause => {
+                            *flag.lock().unwrap() = false;
+                        }
+                        Timer::SetTime(t) => {
+                            time.write().0 = t;
+                        }
+                        Timer::Set(t) => {
+                            time.write().0 = t;
+                            player_clone.read().unwrap().seek(t);
+                        }
+                    }
+                }
+            }
+        });
+
+    let play_coroutine_handle = use_coroutine(|mut rx: UnboundedReceiver<PlayAction>| {
+        let playdata = playdata.to_owned();
+        let player_clone = player.clone();
+        let player_clone_ = player.clone();
+        let time = time.clone();
 
         async move {
             spawn(async move {
-                let mut time = time.to_owned();
                 loop {
-                    if *flag1.lock().unwrap() {
-                        time.write().1 = player.read().unwrap().current_total_time;
-                        time.write().0 += 1;
-                        sleep(Duration::from_secs(1)).await;
-                    } else {
-                        sleep(Duration::from_secs_f32(0.5)).await;
+                    if player_clone_.read().unwrap().empty()
+                        && playdata.read().try_read().unwrap().deref().play_flag
+                    {
+                        handle_play_action_next(
+                            playdata.clone(),
+                            player_clone_.clone(),
+                            timer_coroutine_handle.clone(),
+                        )
+                        .await;
                     }
+                    sleep(Duration::from_secs(1)).await;
                 }
             });
 
             while let Some(msg) = rx.next().await {
                 match msg {
-                    Timer::Start => {
-                        *flag.lock().unwrap() = true;
-                    }
-                    Timer::Stop => {
-                        *flag.lock().unwrap() = false;
-                        time.write().0 = 0;
-                    }
-                    Timer::Pause => {
-                        *flag.lock().unwrap() = false;
-                    }
-                    Timer::Set(t)=>{
-                        time.write().0 = t;
-                    }
-                }
-            }
-        }
-    });
-
-    let play_coroutine_handle = use_coroutine(|mut rx: UnboundedReceiver<PlayAction>| {
-        let playdata = playdata.to_owned();
-        let player_clone = player.clone();
-        let time = time.clone();
-
-        async move {
-            while let Some(msg) = rx.next().await {
-                match msg {
                     PlayAction::Start => {
-                        handle_play_action_start(playdata.clone(), player_clone.clone(), timer_coroutine_handle.clone()).await;
+                        handle_play_action_start(
+                            playdata.clone(),
+                            player_clone.clone(),
+                            timer_coroutine_handle.clone(),
+                        )
+                        .await;
                     }
                     PlayAction::Pause => {
-                        player_clone.write().unwrap().pause();
+                        player_clone.read().unwrap().pause();
                         update_play_flag(playdata.clone(), false).await;
                         timer_coroutine_handle.clone().send(Timer::Pause);
                     }
+                    PlayAction::Resume => {
+                        player_clone.read().unwrap().play();
+                        update_play_flag(playdata.clone(), true).await;
+                        timer_coroutine_handle.clone().send(Timer::Start);
+                    }
                     PlayAction::Stop => {
-                        player_clone.write().unwrap().stop();
+                        player_clone.read().unwrap().stop();
                         update_play_flag(playdata.clone(), false).await;
                         timer_coroutine_handle.clone().send(Timer::Stop);
                     }
                     PlayAction::Next => {
-                        handle_play_action_next(playdata.clone(), player_clone.clone(), timer_coroutine_handle.clone()).await;
+                        dbg!("Next?");
+                        handle_play_action_next(
+                            playdata.clone(),
+                            player_clone.clone(),
+                            timer_coroutine_handle.clone(),
+                        )
+                        .await;
                     }
-                }
-            }
-
-            loop {
-                if playdata.read().read().unwrap().play_flag {
-                    if player_clone.read().unwrap().empty() {
-                        use_coroutine_handle::<PlayAction>().send(PlayAction::Next);
-                    } else {
-                        dbg!(time.read());
+                    PlayAction::Previous => {
+                        handle_play_action_previous(
+                            playdata.clone(),
+                            player_clone.clone(),
+                            timer_coroutine_handle.clone(),
+                        )
+                        .await;
                     }
-                    sleep(Duration::from_secs(1)).await;
-                } else {
-                    sleep(Duration::from_secs(3)).await;
+                    PlayAction::SetVolume(v) => {
+                        player_clone.read().unwrap().set_volume(v);
+                    }
                 }
             }
         }
     });
-
     let current_song = get_current_song(playdata.read().read().unwrap().to_owned());
-
+    async fn changeMode(mut playdata: Signal<RwLock<Play>>, to: PlayMode) {
+        loop {
+            if let Ok(p) = playdata.try_write() {
+                if let Ok(mut r) = p.write() {
+                    r.mode = to;
+                    break;
+                }
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+    async fn changeMute(mut playdata: Signal<RwLock<Play>>, to: bool) {
+        loop {
+            if let Ok(p) = playdata.try_write() {
+                if let Ok(mut r) = p.write() {
+                    r.mute = to;
+                    break;
+                }
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+    async fn changeVolume(mut playdata: Signal<RwLock<Play>>, to: f32) {
+        loop {
+            if let Ok(p) = playdata.try_write() {
+                if let Ok(mut r) = p.write() {
+                    r.volume = to;
+                    break;
+                }
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
     if let Some(s) = current_song {
         let SongInfo {
             name,
@@ -127,34 +200,183 @@ pub fn PlayBar() -> Element {
         } = s;
 
         let time = time.clone();
-        // dbg!(time.read().0 as f32/time.read().1 as f32 * 100.0);
+        let likesongs = &api::LIKE_SONGS_LIST;
+
+        let volume = playdata.read().read().unwrap().volume;
         rsx! {
             Outlet::<crate::Route> {}
-            div { id: "playbar", class: "acrylic",
+            div {
+                id: "playbar",
+                class: "acrylic",
                 input {
                     r#type: "range",
                     id: "progress",
                     max: "{time.read().1}",
                     value: "{time.read().0}",
                     oninput: move |e| {
-                        // player_clone3.write().unwrap().set_time(e.value().parse().unwrap());
-                        // dbg!(e.value());
+                        use_coroutine_handle::<Timer>().send(Timer::SetTime(e.value().parse().unwrap()));
+                    },
+                    onchange: move |e| {
                         use_coroutine_handle::<Timer>().send(Timer::Set(e.value().parse().unwrap()));
                     }
                 }
                 if time.read().1 != 0 {
-                    div { class: "time",left:"{time.read().0 as f32/time.read().1 as f32 * 100.0}%", "{time.read().0/60}:{time.read().0%60:02}" }
-                }
-                div { class: "container",
-                    img { class: "song_cover", src: "{pic_url}" }
-                    div { class: "title&singer",
-                        h4 { "{name}" }
-                        Link { class: "singer", to: Route::SingerDetail { singer_name: singer.clone() }, "{singer}" }
+                    div {
+                        class: "time",
+                        left: "{time.read().0 as f32 / time.read().1 as f32 * 100.0}%",
+                        "{time.read().0 / 60}:{time.read().0 % 60:02}"
                     }
-                    div { class: "control",
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause), "pause" }
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Stop), "stop" }
-                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next), "next" }
+                }
+                div {
+                    class: "controls",
+                    div {
+                        class: "container",
+                        img {
+                            class: "song_cover",
+                            src: "{pic_url}"
+                        }
+                        div {
+                            class: "title&singer",
+                            h4 {
+                                "{name}"
+                            }
+                            Link {
+                                class: "singer",
+                                to: Route::SingerDetail { singer_name: singer.clone() },
+                                "{singer}"
+                            }
+                        }
+                        div {
+                            class: "control",
+                            if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
+                                div {
+                                    onclick: move |_| async move {
+                                        let api = &api::CLIENT;
+                                        let currentsongid = playdata.read().read().unwrap().to_owned().play_current_id.unwrap();
+                                        let r = api.like(false, currentsongid).await;
+                                        if r {
+                                            likesongs.remove(currentsongid).await;
+                                        }
+                                    },
+                                    Icon{name:"favorite_fill"}
+                                }
+                            } else {
+                                div {
+                                    onclick: move |_| async move {
+                                        let api = &api::CLIENT;
+                                        let currentsongid = playdata.read().read().unwrap().to_owned().play_current_id.unwrap();
+                                        let r = api.like(true, currentsongid).await;
+                                        if r {
+                                            likesongs.add(currentsongid).await;
+                                        }
+                                    },
+                                    Icon{name:"favorite"}
+                                }
+                            }
+                        }
+                    }
+                    div {
+                        class: "container",
+                        button {
+                            onclick: move |_| play_coroutine_handle.send(PlayAction::Previous),
+                            Icon{name:"skip_previous"}
+                        }
+                        if playdata.read().read().unwrap().play_flag {
+                            button {
+                                onclick: move |_| play_coroutine_handle.send(PlayAction::Pause),
+                                Icon{name:"pause"}
+                            }
+                        } else {
+                            button {
+                                onclick: move |_| play_coroutine_handle.send(PlayAction::Resume),
+                                Icon{name:"play_arrow"}
+                            }
+                        }
+                        button {
+                            onclick: move |_| play_coroutine_handle.send(PlayAction::Next),
+                            Icon{name:"skip_next"}
+                        }
+                    }
+                    div {
+                        class: "container",
+                        button {
+                            //change to Link
+                            a{
+                                Icon{name:"queue_music"}
+                            }
+                        }
+                        if playdata.read().read().unwrap().mode==PlayMode::Normal {
+                            button {
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Loop).await;},
+                                Icon {name:"repeat"}
+                            }
+                        }
+                        else if playdata.read().read().unwrap().mode==PlayMode::Loop {
+                            button {
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Single).await;},
+                                Icon{name:"repeat_on"}
+                            }
+                        }
+                        else if playdata.read().read().unwrap().mode==PlayMode::Single {
+                            button {
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Normal).await;},
+                                Icon{name:"repeat_one_on"}
+                            }
+                        }
+                        if playdata.read().read().unwrap().mode==PlayMode::Shuffle {
+                            button{
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Normal).await;},
+                                Icon{name:"shuffle_on"}
+                            }
+                        }
+                        else {
+                            button{
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Shuffle).await;},
+                                Icon{name:"shuffle"}
+                            }
+                        }
+
+                        div {
+                            class:"volume_controls",
+                            if playdata.read().read().unwrap().mute{
+                                button {
+                                    onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(volume));changeMute(playdata.to_owned(), false).await;},
+                                    Icon{name:"no_sound"}
+                                }
+                            }
+                            else{
+                                if volume>=0.5{
+                                    button {
+                                        onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(0.0));changeMute(playdata.to_owned(), true).await;},
+                                        Icon{name:"volume_up"}
+                                    }
+                                }else{
+                                    button {
+                                        onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(0.0));changeMute(playdata.to_owned(), true).await;},
+                                        Icon{name:"volume_down"}
+                                    }
+                                }
+                            }
+                            div{class:"volume_container",
+                                input {
+                                    r#type: "range",
+                                    id: "volume",
+                                    max: "1",
+                                    step: "0.01",
+                                    value: "{volume}",
+                                    oninput: move |e| async move {
+                                        play_coroutine_handle.send(PlayAction::SetVolume(e.value().parse().unwrap()));
+                                        changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;
+                                    },
+                                    // onchange: move |e| async move {changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;},
+                                }
+                                div {
+                                    class: "volume",
+                                    left: "{volume * 100.0}%",
+                                    "{volume * 100.0:.0}"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -169,87 +391,178 @@ async fn handle_play_action_start(
     player: Arc<RwLock<Player>>,
     timer_coroutine_handle: Coroutine<Timer>,
 ) {
-
-        let currentid;
+    let currentid;
+    {
+        let play = playdata.read().read().unwrap().to_owned();
+        if let Play {
+            play_current_id: Some(id),
+            ..
+        } = play
         {
-            let play = playdata.read().read().unwrap().to_owned();
-            if let Play {
-                play_current_id: Some(id),
-                ..
-            } = play
-            {
-                currentid = id;
-            } else {
-                return; // Exit early if play_current_id is None
-            }
-        }
-        if check_cache(currentid) {
-            player.write().unwrap().restart(currentid);
-            timer_coroutine_handle.send(Timer::Stop);
-            timer_coroutine_handle.send(Timer::Start);
-            update_play_flag(playdata.clone(), true).await;
+            currentid = id;
         } else {
-            match download(currentid).await {
-                Ok(_) => {
-                    player.write().unwrap().restart(currentid);
-                    timer_coroutine_handle.send(Timer::Start);
-                    update_play_flag(playdata.clone(), true).await;
-                    preload(playdata.clone()).await;
-                }
-                Err(e) => {
-                    dbg!(e);
-                }
+            return; // Exit early if play_current_id is None
+        }
+    }
+    if check_cache(currentid) {
+        player.write().unwrap().restart(currentid);
+        timer_coroutine_handle.send(Timer::Stop);
+        timer_coroutine_handle.send(Timer::Start);
+        update_play_flag(playdata.clone(), true).await;
+    } else {
+        match download(currentid).await {
+            Ok(_) => {
+                player.write().unwrap().restart(currentid);
+                timer_coroutine_handle.send(Timer::Start);
+                update_play_flag(playdata.clone(), true).await;
+                preload(playdata.clone()).await;
+            }
+            Err(e) => {
+                dbg!(e);
             }
         }
     }
+}
 
-
-    async fn handle_play_action_next(
-        playdata: Signal<RwLock<crate::Play>>,
-        player: Arc<RwLock<Player>>,
-        timer_coroutine_handle: Coroutine<Timer>,
-    ) {
-        let currentid;
-        let tracks;
-        let playmode;
+async fn handle_play_action_next(
+    playdata: Signal<RwLock<crate::Play>>,
+    player: Arc<RwLock<Player>>,
+    timer_coroutine_handle: Coroutine<Timer>,
+) {
+    let currentid;
+    let tracks;
+    let playmode;
+    {
+        let play = playdata.read().read().unwrap().to_owned();
+        if let Play {
+            play_current_id: Some(current),
+            play_list: Some(tracklist),
+            mode,
+            ..
+        } = play
         {
-            let play = playdata.read().read().unwrap().to_owned();
-            if let Play {
-                play_current_id: Some(current),
-                play_list: Some(tracklist),
-                mode,
-                ..
-            } = play
-            {
-                currentid = current;
-                tracks = tracklist;
-                playmode = mode;
-            } else {
-                return; // Exit early if any of the required fields are None
-            }
-        }
-    
-        let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
-        match playmode {
-            PlayMode::Normal => {
-                let index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
-                if index >= playlist.len() {
-                    return;
-                }
-                let id = playlist[index];
-                dbg!(id);
-                update_current_id(playdata.clone(), id).await;
-                handle_play_action_start(playdata.clone(), player.clone(), timer_coroutine_handle.clone()).await;
-            }
-            PlayMode::Shuffle => {
-                // Implement Shuffle mode handling if needed
-            }
-            _ => {
-                // Handle other play modes if needed
-            }
+            currentid = current;
+            tracks = tracklist;
+            playmode = mode;
+        } else {
+            return; // Exit early if any of the required fields are None
         }
     }
-    
+
+    let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
+    match playmode {
+        PlayMode::Normal => {
+            let index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
+            if index >= playlist.len() {
+                player.write().unwrap().stop();
+                update_play_flag(playdata.clone(), false).await;
+                timer_coroutine_handle.clone().send(Timer::Stop);
+                return;
+            }
+            let id = playlist[index];
+            update_current_id(playdata.clone(), id).await;
+            handle_play_action_start(
+                playdata.clone(),
+                player.clone(),
+                timer_coroutine_handle.clone(),
+            )
+            .await;
+        }
+        PlayMode::Loop => {
+            let mut index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
+            if index >= playlist.len() {
+                index = 0;
+            }
+            let id = playlist[index];
+            update_current_id(playdata.clone(), id).await;
+            handle_play_action_start(
+                playdata.clone(),
+                player.clone(),
+                timer_coroutine_handle.clone(),
+            )
+            .await;
+        }
+        PlayMode::Shuffle => {
+            let mut rng = rand::thread_rng();
+            let index = rng.gen_range(0..playlist.len());
+            let id = playlist[index];
+            update_current_id(playdata.clone(), id).await;
+            handle_play_action_start(
+                playdata.clone(),
+                player.clone(),
+                timer_coroutine_handle.clone(),
+            )
+            .await;
+        }
+        PlayMode::Single => {
+            let index = playlist.iter().position(|&e| e == currentid).unwrap();
+            let id = playlist[index];
+            update_current_id(playdata.clone(), id).await;
+            handle_play_action_start(
+                playdata.clone(),
+                player.clone(),
+                timer_coroutine_handle.clone(),
+            )
+            .await;
+        }
+    }
+}
+
+async fn handle_play_action_previous(
+    playdata: Signal<RwLock<crate::Play>>,
+    player: Arc<RwLock<Player>>,
+    timer_coroutine_handle: Coroutine<Timer>,
+) {
+    let currentid;
+    let tracks;
+    let playmode;
+    {
+        let play = playdata.read().read().unwrap().to_owned();
+        if let Play {
+            play_current_id: Some(current),
+            play_list: Some(tracklist),
+            mode,
+            ..
+        } = play
+        {
+            currentid = current;
+            tracks = tracklist;
+            playmode = mode;
+        } else {
+            return; // Exit early if any of the required fields are None
+        }
+    }
+
+    let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
+    match playmode {
+        PlayMode::Normal => {
+            let currentindex = playlist.iter().position(|&e| e == currentid).unwrap();
+            dbg!(currentindex);
+            if currentindex == 0 {
+                player.write().unwrap().stop();
+                update_play_flag(playdata.clone(), false).await;
+                timer_coroutine_handle.clone().send(Timer::Stop);
+                return;
+            }
+            let index = currentindex - 1;
+            let id = playlist[index];
+            dbg!(id, index);
+            update_current_id(playdata.clone(), id).await;
+            handle_play_action_start(
+                playdata.clone(),
+                player.clone(),
+                timer_coroutine_handle.clone(),
+            )
+            .await;
+        }
+        PlayMode::Shuffle => {
+            // Implement Shuffle mode handling if needed
+        }
+        _ => {
+            // Handle other play modes if needed
+        }
+    }
+}
 
 fn check_cache(id: u64) -> bool {
     Path::new(&format!("cache/{}", id)).exists()
@@ -257,7 +570,9 @@ fn check_cache(id: u64) -> bool {
 
 async fn download(id: u64) -> Result<(), Box<dyn Error>> {
     let api = &api::CLIENT;
-    let url = api.songs_url(&[id], "12800").await.unwrap()[0].url.to_owned();
+    let url = api.songs_url(&[id], "12800").await.unwrap()[0]
+        .url
+        .to_owned();
     let response = reqwest::get(url).await?;
     let mut file = File::create(format!("cache/{}", id))?;
     let mut stream = response.bytes_stream();

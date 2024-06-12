@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::sync::{RwLock};
+use std::sync::RwLock;
 
 use crate::components::list::{UserFavoriteList, UserList};
 use crate::components::loading::Loading;

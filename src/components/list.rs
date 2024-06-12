@@ -1,3 +1,4 @@
+use crate::components::icons::Icon;
 use crate::components::loading::Loading;
 use crate::Route;
 use dioxus::prelude::*;
@@ -11,7 +12,7 @@ use std::time::Duration;
 // 首页推荐歌单
 #[component]
 pub fn List(name: String, cover_url: String, id: u64) -> Element {
-    rsx! {
+    rsx! (
         div {
             class: "item",
             img {
@@ -26,13 +27,13 @@ pub fn List(name: String, cover_url: String, id: u64) -> Element {
                 }
             }
         }
-    }
+    )
 }
 
 // 带作者
 #[component]
 pub fn ListWithAuthor(name: String, cover_url: String, id: u64, author: String) -> Element {
-    rsx! {
+    rsx! (
         Link {
             to: Route::ListDetail{songlist_id: id},
             div {
@@ -54,7 +55,7 @@ pub fn ListWithAuthor(name: String, cover_url: String, id: u64, author: String) 
                 }
             }
         }
-    }
+    )
 }
 
 #[derive(PartialEq, Clone)]
@@ -172,7 +173,6 @@ pub fn ListDetail(songlist_id: u64) -> Element {
 #[component]
 pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     use crate::components::playbar::PlayAction;
-
     fn lazyload_init() {
         eval(
             r#"
@@ -202,20 +202,24 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     fn play(current_id: u64, tracks: Vec<SongInfo>) {
         let mut playdata = use_context::<Signal<RwLock<crate::Play>>>();
         loop {
-        if let Ok(t) = playdata.try_write() {
-            dbg!(1);
-            if let Ok(mut v) = t.write(){
-                dbg!(2);
-            v.play_current_id = Some(current_id);
-            v.play_list = Some(tracks.clone());
-            use_coroutine_handle::<PlayAction>().send(PlayAction::Start);
-        break;}
+            if let Ok(t) = playdata.try_write() {
+                dbg!(1);
+                if let Ok(mut v) = t.write() {
+                    dbg!(2);
+                    v.play_current_id = Some(current_id);
+                    v.play_list = Some(tracks.clone());
+                    use_coroutine_handle::<PlayAction>().send(PlayAction::Start);
+                    break;
+                }
+            }
+            dbg!(0);
+            sleep(Duration::from_secs(2))
         }
-        dbg!(0);
-    sleep(Duration::from_secs(2))}
     }
 
     let tracks_signal = use_signal(|| tracks.clone());
+    // let likesongs = &api::LIKE_SONGS_LIST;
+    let mut likesongs = use_signal(|| &api::LIKE_SONGS_LIST);
 
     rsx! {
         div {
@@ -236,7 +240,7 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                             h2 { "{track.name}" }
                             Link {
                                 class: "singer",
-                                onclick: move |event:MouseEvent| {
+                                onclick: move |event: MouseEvent| {
                                     event.stop_propagation();
                                 },
                                 to: Route::SingerDetail { singer_name: track.singer.clone() },
@@ -247,7 +251,7 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                     div {
                         class: "album",
                         Link {
-                            onclick: move |event:MouseEvent| {
+                            onclick: move |event: MouseEvent| {
                                 event.stop_propagation();
                             },
                             to: Route::AlbumDetail { album_id: track.album_id },
@@ -255,11 +259,41 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                         }
                     },
                     div {
+                        class: "like",
+                        if likesongs.read().check(track.id) {
+                            div{
+                                onclick: move |e| async move {
+                                    e.stop_propagation();
+                                    let api = &api::CLIENT;
+                                    let r = api.like(false, track.id).await;
+                                    dbg!("取消收藏:",r);
+                                    if r {
+                                        likesongs.write().remove(track.id).await;
+                                    }
+                                },
+                                Icon{name:"favorite_fill"}
+                            }
+                        } else {
+                            div {
+                                onclick: move |e| async move {
+                                    e.stop_propagation();
+                                    let api = &api::CLIENT;
+                                    let r = api.like(true, track.id).await;
+                                    dbg!("收藏:",r);
+                                    if r {
+                                        likesongs.write().add(track.id).await;
+                                    }
+                                },
+                                Icon{name:"favorite"}
+                            }
+                        }
+                    },
+                    div {
                         class: "duration",
-                        {format!("{}:{:0>2}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
+                        {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
                     }
                 }
             }
         }
-    }
+    }    
 }

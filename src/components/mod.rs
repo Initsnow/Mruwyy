@@ -1,5 +1,6 @@
 pub mod account;
 pub mod album;
+pub mod icons;
 pub mod list;
 pub mod loading;
 pub mod login;

@@ -6,7 +6,8 @@ use lib::*;
 pub fn AlbumDetail(album_id: u64) -> Element {
     let future = use_resource(move || async move {
         let api = &api::CLIENT;
-        let x = api.album(album_id).await; x
+        let x = api.album(album_id).await;
+        x
     });
     rsx! {
         match &*future.read() {

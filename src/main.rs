@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use lib::api;
-use std::sync::{RwLock};
 use ncm_api::SongInfo;
-use tracing::Level;
+use std::sync::RwLock;
+use tracing::{instrument::WithSubscriber, Level};
 mod components;
 use components::{
     account::AccountDetail,
@@ -44,9 +44,19 @@ struct Status {
     login: Option<AccountInfo>,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug, PartialEq)]
+/**
+Normal => 播完暂停
+
+Loop => 循环列表
+
+Shuffle => 随机播放
+
+Single => 单曲循环
+*/
 enum PlayMode {
     Normal,
+    Loop,
     Shuffle,
     Single,
 }
@@ -58,7 +68,14 @@ struct Play {
     play_list: Option<Vec<SongInfo>>,
     mode: PlayMode,
     preload_limit: usize,
+    volume: f32,
+    mute: bool,
 }
+
+// #[derive(Clone)]
+// struct UserLike {
+//     list: Vec<u64>,
+// }
 
 //const STYLE: &str = manganis::mg!(file("./assets/icons/style.css"));
 fn main() {
@@ -76,16 +93,22 @@ fn App() -> Element {
         Signal::new(RwLock::new(Play {
             play_current_id: None,
             play_list: None,
-            play_flag:false,
+            play_flag: false,
             mode: PlayMode::Normal,
             preload_limit: 1,
+            volume: 0.3,
+            mute: false,
         }))
     });
     spawn(async {
         let mut status = use_context::<Signal<RwLock<Status>>>();
+        let userlike = &api::LIKE_SONGS_LIST;
         let api = &api::CLIENT;
         if let Ok(login_info) = api.login_status().await {
             dbg!("已通过cookie登录");
+            let list: Vec<u64> = api.user_song_id_list(login_info.uid).await.unwrap();
+            // use_context_provider(|| Signal::new(UserLike { list }));
+            userlike.init(list).await;
             status.write().write().unwrap().login = Some(AccountInfo {
                 name: login_info.nickname,
                 uid: login_info.uid,
