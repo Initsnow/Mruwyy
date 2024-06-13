@@ -220,7 +220,8 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     let tracks_signal = use_signal(|| tracks.clone());
     // let likesongs = &api::LIKE_SONGS_LIST;
     let mut likesongs = use_signal(|| &api::LIKE_SONGS_LIST);
-
+    let playdata = use_context::<Signal<RwLock<crate::Play>>>();
+    let current_id=playdata.read().read().unwrap().to_owned().play_current_id;
     rsx! {
         div {
             id: "track_list",
@@ -229,6 +230,11 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                 div {
                     class: "track",
                     onclick: move |_| { play(track.id, tracks_signal.read().clone()); },
+                    if let Some(id) = current_id {
+                        if id == track.id {
+                            div {id: "current_song"}
+                        }
+                    }
                     img {
                         class: "lazy_load song_cover",
                         "data-src": "{track.pic_url}",

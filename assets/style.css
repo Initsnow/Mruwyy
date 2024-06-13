@@ -670,3 +670,22 @@ button {
     transition: all 0.3s;
     background: hsla(0,0%,100%,0.08);
 }
+
+.track:has(#current_song){
+    background-color: hsl(from var(--systemThemeColor) h calc(s - 60) calc(l + 35));
+    color: var(--systemThemeColor);
+}
+
+#playlist .track:not(#playlist h1:first-of-type ~ .track){
+    display: none;
+}
+
+
+
+#playlist h1:first-of-type {
+    margin-top: 0;
+}
+
+#playlist h1{
+    margin: 0.5rem 0;
+}

@@ -7,3 +7,4 @@ pub mod login;
 pub mod playbar;
 pub mod sidebar;
 pub mod singer;
+pub mod playlist;

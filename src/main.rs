@@ -15,6 +15,7 @@ use components::{
     playbar::PlayBar,
     sidebar::Sidebar,
     singer::SingerDetail,
+    playlist::PlayList
 };
 
 #[derive(Clone, Routable, Debug, PartialEq)]
@@ -33,6 +34,8 @@ pub enum Route {
     Login {},
     #[route("/account")]
     AccountDetail {},
+    #[route("/playlist")]
+    PlayList {},
     #[end_layout]
     #[end_layout]
     #[route("/:..route")]
@@ -50,6 +53,8 @@ Normal => 播完暂停
 
 Loop => 循环列表
 
+Random => 循环随机
+
 Shuffle => 随机播放
 
 Single => 单曲循环
@@ -57,7 +62,7 @@ Single => 单曲循环
 enum PlayMode {
     Normal,
     Loop,
-    Shuffle,
+    Random,
     Single,
 }
 

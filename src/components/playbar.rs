@@ -1,4 +1,3 @@
-use crate::Route;
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use lib::api;
@@ -14,8 +13,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::time::sleep;
 use crate::components::icons::Icon;
-
-use crate::{Play, PlayMode};
+use crate::{Play, PlayMode,Route};
 
 pub enum PlayAction {
     Start,
@@ -301,7 +299,8 @@ pub fn PlayBar() -> Element {
                         class: "container",
                         button {
                             //change to Link
-                            a{
+                            Link{
+                                to: Route::PlayList {},
                                 Icon{name:"queue_music"}
                             }
                         }
@@ -323,7 +322,7 @@ pub fn PlayBar() -> Element {
                                 Icon{name:"repeat_one_on"}
                             }
                         }
-                        if playdata.read().read().unwrap().mode==PlayMode::Shuffle {
+                        if playdata.read().read().unwrap().mode==PlayMode::Random {
                             button{
                                 onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Normal).await;},
                                 Icon{name:"shuffle_on"}
@@ -331,7 +330,7 @@ pub fn PlayBar() -> Element {
                         }
                         else {
                             button{
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Shuffle).await;},
+                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Random).await;},
                                 Icon{name:"shuffle"}
                             }
                         }
@@ -482,7 +481,7 @@ async fn handle_play_action_next(
             )
             .await;
         }
-        PlayMode::Shuffle => {
+        PlayMode::Random => {
             let mut rng = rand::thread_rng();
             let index = rng.gen_range(0..playlist.len());
             let id = playlist[index];
@@ -555,8 +554,8 @@ async fn handle_play_action_previous(
             )
             .await;
         }
-        PlayMode::Shuffle => {
-            // Implement Shuffle mode handling if needed
+        PlayMode::Random => {
+            // Implement Random mode handling if needed
         }
         _ => {
             // Handle other play modes if needed
@@ -624,7 +623,7 @@ async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
                 }
                 slice
             }
-            PlayMode::Shuffle => Vec::new(),
+            PlayMode::Random => Vec::new(),
             _ => Vec::new(),
         }
     } else {
