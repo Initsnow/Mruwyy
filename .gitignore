@@ -9,6 +9,6 @@
 **/*.rs.bk
 
 /cache/
-cookies.json
+*.json
 .idea
 *.txt
