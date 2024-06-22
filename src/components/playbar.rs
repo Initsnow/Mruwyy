@@ -1,3 +1,5 @@
+use crate::components::icons::Icon;
+use crate::{Play, PlayMode, Route};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use lib::api;
@@ -12,8 +14,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::time::sleep;
-use crate::components::icons::Icon;
-use crate::{Play, PlayMode,Route};
 
 pub enum PlayAction {
     Start,
