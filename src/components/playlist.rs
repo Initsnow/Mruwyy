@@ -25,18 +25,15 @@ pub fn PlayList() -> Element {
             tracks = tracklist;
             playmode = mode;
         } else {
-            return rsx!("Can't Get PlayData")
+            return rsx!("Can't Get PlayData");
         }
     }
-    
-    if let PlayMode::Random= playmode {
+
+    if let PlayMode::Random = playmode {
         return rsx!("Random Mode is enabled.");
-    }else {
-        rsx!(
-            TrackList { tracks }
-        )
+    } else {
+        rsx!(TrackList { tracks })
     }
-    
 }
 
 // 歌单详情内的歌曲列表
@@ -91,62 +88,66 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     // let likesongs = &api::LIKE_SONGS_LIST;
     let mut likesongs = use_signal(|| &api::LIKE_SONGS_LIST);
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
-    let current_id=playdata.read().read().unwrap().to_owned().play_current_id;
+    let current_id = playdata.read().read().unwrap().to_owned().play_current_id;
     rsx! {
         div {
             id: "playlist",
-            onmounted: |_| { lazyload_init(); },
+            onmounted: |_| {
+                lazyload_init();
+            },
             for track in tracks {
                 if let Some(id) = current_id {
                     if id == track.id {
-                        h1{"正在播放"}
+                        h1 { "正在播放" }
                         div {
                             class: "track",
-                            onclick: move |_| { play(track.id, tracks_signal.read().clone()); },
-                            div {id: "current_song"}
+                            onclick: move |_| {
+                                play(track.id, tracks_signal.read().clone());
+                            },
+                            div { id: "current_song" }
                             img {
                                 class: "lazy_load song_cover",
-                                "src": "{track.pic_url}",
-                            },
-                            div {
-                                class: "title&singer",
-                                div {
-                                    class: "container",
+                                "src": "{track.pic_url}"
+                            }
+                            div { class: "title&singer",
+                                div { class: "container",
                                     h2 { "{track.name}" }
                                     Link {
                                         class: "singer",
                                         onclick: move |event: MouseEvent| {
                                             event.stop_propagation();
                                         },
-                                        to: Route::SingerDetail { singer_name: track.singer.clone() },
+                                        to: Route::SingerDetail {
+                                            singer_name: track.singer.clone(),
+                                        },
                                         "{track.singer}"
                                     }
                                 }
-                            },
-                            div {
-                                class: "album",
+                            }
+                            div { class: "album",
                                 Link {
                                     onclick: move |event: MouseEvent| {
                                         event.stop_propagation();
                                     },
-                                    to: Route::AlbumDetail { album_id: track.album_id },
+                                    to: Route::AlbumDetail {
+                                        album_id: track.album_id,
+                                    },
                                     "{track.album}"
                                 }
-                            },
-                            div {
-                                class: "like",
+                            }
+                            div { class: "like",
                                 if likesongs.read().check(track.id) {
-                                    div{
+                                    div {
                                         onclick: move |e| async move {
                                             e.stop_propagation();
                                             let api = &api::CLIENT;
                                             let r = api.like(false, track.id).await;
-                                            dbg!("取消收藏:",r);
+                                            dbg!("取消收藏:", r);
                                             if r {
                                                 likesongs.write().remove(track.id).await;
                                             }
                                         },
-                                        Icon{name:"favorite_fill"}
+                                        Icon { name: "favorite_fill" }
                                     }
                                 } else {
                                     div {
@@ -154,96 +155,94 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                             e.stop_propagation();
                                             let api = &api::CLIENT;
                                             let r = api.like(true, track.id).await;
-                                            dbg!("收藏:",r);
+                                            dbg!("收藏:", r);
                                             if r {
                                                 likesongs.write().add(track.id).await;
                                             }
                                         },
-                                        Icon{name:"favorite"}
+                                        Icon { name: "favorite" }
                                     }
                                 }
-                            },
-                            div {
-                                class: "duration",
+                            }
+                            div { class: "duration",
                                 {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
                             }
                         }
-                        h1{"即将播放"}
-                    }else{
-                    div {
-                        class: "track",
-                        onclick: move |_| { play(track.id, tracks_signal.read().clone()); },
-                        img {
-                            class: "lazy_load song_cover",
-                            "data-src": "{track.pic_url}",
-                        },
+                        h1 { "即将播放" }
+                    } else {
                         div {
-                            class: "title&singer",
-                            div {
-                                class: "container",
-                                h2 { "{track.name}" }
+                            class: "track",
+                            onclick: move |_| {
+                                play(track.id, tracks_signal.read().clone());
+                            },
+                            img {
+                                class: "lazy_load song_cover",
+                                "data-src": "{track.pic_url}"
+                            }
+                            div { class: "title&singer",
+                                div { class: "container",
+                                    h2 { "{track.name}" }
+                                    Link {
+                                        class: "singer",
+                                        onclick: move |event: MouseEvent| {
+                                            event.stop_propagation();
+                                        },
+                                        to: Route::SingerDetail {
+                                            singer_name: track.singer.clone(),
+                                        },
+                                        "{track.singer}"
+                                    }
+                                }
+                            }
+                            div { class: "album",
                                 Link {
-                                    class: "singer",
                                     onclick: move |event: MouseEvent| {
                                         event.stop_propagation();
                                     },
-                                    to: Route::SingerDetail { singer_name: track.singer.clone() },
-                                    "{track.singer}"
-                                }
-                            }
-                        },
-                        div {
-                            class: "album",
-                            Link {
-                                onclick: move |event: MouseEvent| {
-                                    event.stop_propagation();
-                                },
-                                to: Route::AlbumDetail { album_id: track.album_id },
-                                "{track.album}"
-                            }
-                        },
-                        div {
-                            class: "like",
-                            if likesongs.read().check(track.id) {
-                                div{
-                                    onclick: move |e| async move {
-                                        e.stop_propagation();
-                                        let api = &api::CLIENT;
-                                        let r = api.like(false, track.id).await;
-                                        dbg!("取消收藏:",r);
-                                        if r {
-                                            likesongs.write().remove(track.id).await;
-                                        }
+                                    to: Route::AlbumDetail {
+                                        album_id: track.album_id,
                                     },
-                                    Icon{name:"favorite_fill"}
-                                }
-                            } else {
-                                div {
-                                    onclick: move |e| async move {
-                                        e.stop_propagation();
-                                        let api = &api::CLIENT;
-                                        let r = api.like(true, track.id).await;
-                                        dbg!("收藏:",r);
-                                        if r {
-                                            likesongs.write().add(track.id).await;
-                                        }
-                                    },
-                                    Icon{name:"favorite"}
+                                    "{track.album}"
                                 }
                             }
-                        },
-                        div {
-                            class: "duration",
-                            {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
+                            div { class: "like",
+                                if likesongs.read().check(track.id) {
+                                    div {
+                                        onclick: move |e| async move {
+                                            e.stop_propagation();
+                                            let api = &api::CLIENT;
+                                            let r = api.like(false, track.id).await;
+                                            dbg!("取消收藏:", r);
+                                            if r {
+                                                likesongs.write().remove(track.id).await;
+                                            }
+                                        },
+                                        Icon { name: "favorite_fill" }
+                                    }
+                                } else {
+                                    div {
+                                        onclick: move |e| async move {
+                                            e.stop_propagation();
+                                            let api = &api::CLIENT;
+                                            let r = api.like(true, track.id).await;
+                                            dbg!("收藏:", r);
+                                            if r {
+                                                likesongs.write().add(track.id).await;
+                                            }
+                                        },
+                                        Icon { name: "favorite" }
+                                    }
+                                }
+                            }
+                            div { class: "duration",
+                                {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
+                            }
                         }
                     }
+                } else {
+                    h1 { "未播放任何歌曲" }
                 }
-                }else{
-                    h1{"未播放任何歌曲"}
-                }
-                        
-                
             }
         }
-    }    
+    }
 }

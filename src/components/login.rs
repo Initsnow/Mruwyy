@@ -12,21 +12,41 @@ use std::time::Duration;
 pub fn LoginWithUsernameAndPwd() -> Element {
     rsx! {
         div { class: "login_container",
-            form { class:"login",onsubmit: move |event| {
-            spawn(async move {
-                println!("Clicked! {event:?}");
-                let api=&api::CLIENT;
-                let data=event.data;
-                println!("{:?}",data.values().get("pwd"));
-                dbg!(data.values().get("phone").unwrap().as_value(),data.values().get("pwd").unwrap().as_value());
-                let result=api.login(data.values().get("phone").unwrap().as_value(),data.values().get("pwd").unwrap().as_value()).await;
-                dbg!(result);
-                dbg!(api.cookie_jar());
-            });
-         },
-                input { r#type:"text", name:"phone", placeholder:"Username | Email | Phone", class:"login-input" },
-                input { r#type:"password", name:"pwd", placeholder:"密码", class:"login-input" },
-                button { r#type:"submit",class: "login-button", "登录"},
+            form {
+                class: "login",
+                onsubmit: move |event| {
+                    spawn(async move {
+                        println!("Clicked! {event:?}");
+                        let api = &api::CLIENT;
+                        let data = event.data;
+                        println!("{:?}", data.values().get("pwd"));
+                        dbg!(
+                            data.values().get("phone").unwrap().as_value(),
+                            data.values().get("pwd").unwrap().as_value(),
+                        );
+                        let result = api
+                            .login(
+                                data.values().get("phone").unwrap().as_value(),
+                                data.values().get("pwd").unwrap().as_value(),
+                            )
+                            .await;
+                        dbg!(result);
+                        dbg!(api.cookie_jar());
+                    });
+                },
+                input {
+                    r#type: "text",
+                    name: "phone",
+                    placeholder: "Username | Email | Phone",
+                    class: "login-input"
+                }
+                input {
+                    r#type: "password",
+                    name: "pwd",
+                    placeholder: "密码",
+                    class: "login-input"
+                }
+                button { r#type: "submit", class: "login-button", "登录" }
             }
         }
     }
@@ -54,13 +74,13 @@ fn checkLogin(mut error: Signal<Option<String>>) {
 #[component]
 pub fn Login() -> Element {
     let error = use_signal(|| None);
-    rsx!(LoginWithQrcode { error: error })
+    rsx!(LoginWithQrcode { error })
 }
 
 #[component]
 pub fn LoginWithQrcode(error: Signal<Option<String>>) -> Element {
     if let Some(e) = error() {
-        return rsx! {"Login failed:\n{e}"};
+        return rsx! { "Login failed:\n{e}" };
     }
     let unikey = use_signal(String::new);
     let qrmsg = use_signal(String::new);
@@ -114,8 +134,8 @@ pub fn LoginWithQrcode(error: Signal<Option<String>>) -> Element {
                         dbg!(b);
                         dbg!(api.cookie_jar());
                     });
-                 },
-                 "Click"
+                },
+                "Click"
             }
         }
 

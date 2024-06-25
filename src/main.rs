@@ -13,9 +13,9 @@ use components::{
     loading::Loading,
     login::Login,
     playbar::PlayBar,
+    playlist::PlayList,
     sidebar::Sidebar,
     singer::SingerDetail,
-    playlist::PlayList
 };
 
 #[derive(Clone, Routable, Debug, PartialEq)]
@@ -139,8 +139,8 @@ fn Blog(id: i32) -> Element {
 #[component]
 fn PageNotFound(route: Vec<String>) -> Element {
     rsx! {
-        p {"NOBODY (´。＿。｀)"}
-        p {"404 - Page not found: {route:?}"}
+        p { "NOBODY (´。＿。｀)" }
+        p { "404 - Page not found: {route:?}" }
         Link { to: Route::Home {}, "Go home, and never come back." }
     }
 }
@@ -162,8 +162,8 @@ fn Home() -> Element {
                         }
                     }
                 }
-
-
+        
+        
             },
             Some(Err(e)) => rsx!{
                 p {"Error: {e}"}
@@ -172,7 +172,5 @@ fn Home() -> Element {
                 Loading {}
             }
         }
-
-
     }
 }

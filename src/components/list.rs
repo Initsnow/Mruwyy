@@ -13,16 +13,13 @@ use std::time::Duration;
 #[component]
 pub fn List(name: String, cover_url: String, id: u64) -> Element {
     rsx! (
-        div {
-            class: "item",
-            img {
-                class: "song_cover",
-                src: "{cover_url}",
-            },
-            div{
-                class: "list_name",
+        div { class: "item",
+            img { class: "song_cover", src: "{cover_url}" }
+            div { class: "list_name",
                 Link {
-                    to: Route::ListDetail{songlist_id: id},
+                    to: Route::ListDetail {
+                        songlist_id: id,
+                    },
                     "{name}"
                 }
             }
@@ -35,23 +32,14 @@ pub fn List(name: String, cover_url: String, id: u64) -> Element {
 pub fn ListWithAuthor(name: String, cover_url: String, id: u64, author: String) -> Element {
     rsx! (
         Link {
-            to: Route::ListDetail{songlist_id: id},
-            div {
-                class: "item",
-                img {
-                    class: "song_cover",
-                    src: "{cover_url}",
-                },
-                div {
-                    class: "list_info",
-                    div {
-                        class: "list_name",
-                        "{name}"
-                    },
-                    div {
-                        class: "list_author",
-                        "{author}"
-                    }
+            to: Route::ListDetail {
+                songlist_id: id,
+            },
+            div { class: "item",
+                img { class: "song_cover", src: "{cover_url}" }
+                div { class: "list_info",
+                    div { class: "list_name", "{name}" }
+                    div { class: "list_author", "{author}" }
                 }
             }
         }
@@ -99,15 +87,14 @@ impl Extend<Track> for Tracks {
 #[component]
 pub fn UserList(lists: Tracks) -> Element {
     rsx! {
-        div {
-            class: "userlist acrylic",
+        div { class: "userlist acrylic",
             h1 { "我的歌单" }
             for song_list in &lists.vec {
                 ListWithAuthor {
                     name: song_list.name.clone(),
                     cover_url: song_list.cover_url.clone(),
                     id: song_list.id,
-                    author: song_list.author.clone(),
+                    author: song_list.author.clone()
                 }
             }
         }
@@ -118,15 +105,14 @@ pub fn UserList(lists: Tracks) -> Element {
 #[component]
 pub fn UserFavoriteList(lists: Tracks) -> Element {
     rsx! {
-        div {
-            class: "userlist acrylic",
+        div { class: "userlist acrylic",
             h1 { "收藏歌单" }
             for song_list in &lists.vec {
                 ListWithAuthor {
                     name: song_list.name.clone(),
                     cover_url: song_list.cover_url.clone(),
                     id: song_list.id,
-                    author: song_list.author.clone(),
+                    author: song_list.author.clone()
                 }
             }
         }
@@ -221,63 +207,67 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     // let likesongs = &api::LIKE_SONGS_LIST;
     let mut likesongs = use_signal(|| &api::LIKE_SONGS_LIST);
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
-    let current_id=playdata.read().read().unwrap().to_owned().play_current_id;
+    let current_id = playdata.read().read().unwrap().to_owned().play_current_id;
     rsx! {
         div {
             id: "track_list",
-            onmounted: |_| { lazyload_init(); },
+            onmounted: |_| {
+                lazyload_init();
+            },
             for track in tracks {
                 div {
                     class: "track",
-                    onclick: move |_| { play(track.id, tracks_signal.read().clone()); },
+                    onclick: move |_| {
+                        play(track.id, tracks_signal.read().clone());
+                    },
                     if let Some(id) = current_id {
                         if id == track.id {
-                            div {id: "current_song"}
+                            div { id: "current_song" }
                         }
                     }
                     img {
                         class: "lazy_load song_cover",
-                        "data-src": "{track.pic_url}",
-                    },
-                    div {
-                        class: "title&singer",
-                        div {
-                            class: "container",
+                        "data-src": "{track.pic_url}"
+                    }
+                    div { class: "title&singer",
+                        div { class: "container",
                             h2 { "{track.name}" }
                             Link {
                                 class: "singer",
                                 onclick: move |event: MouseEvent| {
                                     event.stop_propagation();
                                 },
-                                to: Route::SingerDetail { singer_name: track.singer.clone() },
+                                to: Route::SingerDetail {
+                                    singer_name: track.singer.clone(),
+                                },
                                 "{track.singer}"
                             }
                         }
-                    },
-                    div {
-                        class: "album",
+                    }
+                    div { class: "album",
                         Link {
                             onclick: move |event: MouseEvent| {
                                 event.stop_propagation();
                             },
-                            to: Route::AlbumDetail { album_id: track.album_id },
+                            to: Route::AlbumDetail {
+                                album_id: track.album_id,
+                            },
                             "{track.album}"
                         }
-                    },
-                    div {
-                        class: "like",
+                    }
+                    div { class: "like",
                         if likesongs.read().check(track.id) {
-                            div{
+                            div {
                                 onclick: move |e| async move {
                                     e.stop_propagation();
                                     let api = &api::CLIENT;
                                     let r = api.like(false, track.id).await;
-                                    dbg!("取消收藏:",r);
+                                    dbg!("取消收藏:", r);
                                     if r {
                                         likesongs.write().remove(track.id).await;
                                     }
                                 },
-                                Icon{name:"favorite_fill"}
+                                Icon { name: "favorite_fill" }
                             }
                         } else {
                             div {
@@ -285,21 +275,20 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                     e.stop_propagation();
                                     let api = &api::CLIENT;
                                     let r = api.like(true, track.id).await;
-                                    dbg!("收藏:",r);
+                                    dbg!("收藏:", r);
                                     if r {
                                         likesongs.write().add(track.id).await;
                                     }
                                 },
-                                Icon{name:"favorite"}
+                                Icon { name: "favorite" }
                             }
                         }
-                    },
-                    div {
-                        class: "duration",
+                    }
+                    div { class: "duration",
                         {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
                     }
                 }
             }
         }
-    }    
+    }
 }

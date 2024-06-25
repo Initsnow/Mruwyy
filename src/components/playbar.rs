@@ -8,7 +8,7 @@ use lib::TIME;
 use ncm_api::SongInfo;
 use rand::Rng;
 use std::error::Error;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::ops::Deref;
 use std::path::Path;
@@ -52,7 +52,7 @@ pub fn PlayBar() -> Element {
                     loop {
                         if *flag1.lock().unwrap() {
                             time.write().1 = TIME.read().unwrap().get_total_millis();
-                            time.write().0 =TIME.read().unwrap().get_current_millis();
+                            time.write().0 = TIME.read().unwrap().get_current_millis();
                             sleep(Duration::from_secs_f32(0.3)).await;
                         } else {
                             sleep(Duration::from_secs_f32(0.5)).await;
@@ -205,9 +205,7 @@ pub fn PlayBar() -> Element {
         let volume = playdata.read().read().unwrap().volume;
         rsx! {
             Outlet::<crate::Route> {}
-            div {
-                id: "playbar",
-                class: "acrylic",
+            div { id: "playbar", class: "acrylic",
                 input {
                     r#type: "range",
                     id: "progress",
@@ -228,138 +226,150 @@ pub fn PlayBar() -> Element {
                         "{time.read().0 / 1000 / 60}:{time.read().0 / 1000 % 60:02}"
                     }
                 }
-                div {
-                    class: "controls",
-                    div {
-                        class: "container",
-                        img {
-                            class: "song_cover",
-                            src: "{pic_url}"
-                        }
-                        div {
-                            class: "title&singer",
-                            h4 {
-                                "{name}"
-                            }
+                div { class: "controls",
+                    div { class: "container",
+                        img { class: "song_cover", src: "{pic_url}" }
+                        div { class: "title&singer",
+                            h4 { "{name}" }
                             Link {
                                 class: "singer",
-                                to: Route::SingerDetail { singer_name: singer.clone() },
+                                to: Route::SingerDetail {
+                                    singer_name: singer.clone(),
+                                },
                                 "{singer}"
                             }
                         }
-                        div {
-                            class: "control",
+                        div { class: "control",
                             if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
                                 div {
                                     onclick: move |_| async move {
                                         let api = &api::CLIENT;
-                                        let currentsongid = playdata.read().read().unwrap().to_owned().play_current_id.unwrap();
+                                        let currentsongid = playdata
+                                            .read()
+                                            .read()
+                                            .unwrap()
+                                            .to_owned()
+                                            .play_current_id
+                                            .unwrap();
                                         let r = api.like(false, currentsongid).await;
                                         if r {
                                             likesongs.remove(currentsongid).await;
                                         }
                                     },
-                                    Icon{name:"favorite_fill"}
+                                    Icon { name: "favorite_fill" }
                                 }
                             } else {
                                 div {
                                     onclick: move |_| async move {
                                         let api = &api::CLIENT;
-                                        let currentsongid = playdata.read().read().unwrap().to_owned().play_current_id.unwrap();
+                                        let currentsongid = playdata
+                                            .read()
+                                            .read()
+                                            .unwrap()
+                                            .to_owned()
+                                            .play_current_id
+                                            .unwrap();
                                         let r = api.like(true, currentsongid).await;
                                         if r {
                                             likesongs.add(currentsongid).await;
                                         }
                                     },
-                                    Icon{name:"favorite"}
+                                    Icon { name: "favorite" }
                                 }
                             }
                         }
                     }
-                    div {
-                        class: "container",
-                        button {
-                            onclick: move |_| play_coroutine_handle.send(PlayAction::Previous),
-                            Icon{name:"skip_previous"}
+                    div { class: "container",
+                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Previous),
+                            Icon { name: "skip_previous" }
                         }
                         if playdata.read().read().unwrap().play_flag {
+                            button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause),
+                                Icon { name: "pause" }
+                            }
+                        } else {
+                            button { onclick: move |_| play_coroutine_handle.send(PlayAction::Resume),
+                                Icon { name: "play_arrow" }
+                            }
+                        }
+                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next),
+                            Icon { name: "skip_next" }
+                        }
+                    }
+                    div { class: "container",
+                        button {
+                            //change to Link
+                            Link { to: Route::PlayList {},
+                                Icon { name: "queue_music" }
+                            }
+                        }
+                        if playdata.read().read().unwrap().mode == PlayMode::Normal {
                             button {
-                                onclick: move |_| play_coroutine_handle.send(PlayAction::Pause),
-                                Icon{name:"pause"}
+                                onclick: move |_| async move {
+                                    changeMode(playdata.to_owned(), PlayMode::Loop).await;
+                                },
+                                Icon { name: "repeat" }
+                            }
+                        } else if playdata.read().read().unwrap().mode == PlayMode::Loop {
+                            button {
+                                onclick: move |_| async move {
+                                    changeMode(playdata.to_owned(), PlayMode::Single).await;
+                                },
+                                Icon { name: "repeat_on" }
+                            }
+                        } else if playdata.read().read().unwrap().mode == PlayMode::Single {
+                            button {
+                                onclick: move |_| async move {
+                                    changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                },
+                                Icon { name: "repeat_one_on" }
+                            }
+                        }
+                        if playdata.read().read().unwrap().mode == PlayMode::Random {
+                            button {
+                                onclick: move |_| async move {
+                                    changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                },
+                                Icon { name: "shuffle_on" }
                             }
                         } else {
                             button {
-                                onclick: move |_| play_coroutine_handle.send(PlayAction::Resume),
-                                Icon{name:"play_arrow"}
-                            }
-                        }
-                        button {
-                            onclick: move |_| play_coroutine_handle.send(PlayAction::Next),
-                            Icon{name:"skip_next"}
-                        }
-                    }
-                    div {
-                        class: "container",
-                        button {
-                            //change to Link
-                            Link{
-                                to: Route::PlayList {},
-                                Icon{name:"queue_music"}
-                            }
-                        }
-                        if playdata.read().read().unwrap().mode==PlayMode::Normal {
-                            button {
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Loop).await;},
-                                Icon {name:"repeat"}
-                            }
-                        }
-                        else if playdata.read().read().unwrap().mode==PlayMode::Loop {
-                            button {
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Single).await;},
-                                Icon{name:"repeat_on"}
-                            }
-                        }
-                        else if playdata.read().read().unwrap().mode==PlayMode::Single {
-                            button {
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Normal).await;},
-                                Icon{name:"repeat_one_on"}
-                            }
-                        }
-                        if playdata.read().read().unwrap().mode==PlayMode::Random {
-                            button{
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Normal).await;},
-                                Icon{name:"shuffle_on"}
-                            }
-                        }
-                        else {
-                            button{
-                                onclick: move |_| async move {changeMode(playdata.to_owned(), PlayMode::Random).await;},
-                                Icon{name:"shuffle"}
+                                onclick: move |_| async move {
+                                    changeMode(playdata.to_owned(), PlayMode::Random).await;
+                                },
+                                Icon { name: "shuffle" }
                             }
                         }
 
-                        div {
-                            class:"volume_controls",
-                            if playdata.read().read().unwrap().mute{
+                        div { class: "volume_controls",
+                            if playdata.read().read().unwrap().mute {
                                 button {
-                                    onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(volume));changeMute(playdata.to_owned(), false).await;},
-                                    Icon{name:"no_sound"}
+                                    onclick: move |_| async move {
+                                        play_coroutine_handle.send(PlayAction::SetVolume(volume));
+                                        changeMute(playdata.to_owned(), false).await;
+                                    },
+                                    Icon { name: "no_sound" }
+                                }
+                            } else {
+                                if volume >= 0.5 {
+                                    button {
+                                        onclick: move |_| async move {
+                                            play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                            changeMute(playdata.to_owned(), true).await;
+                                        },
+                                        Icon { name: "volume_up" }
+                                    }
+                                } else {
+                                    button {
+                                        onclick: move |_| async move {
+                                            play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                            changeMute(playdata.to_owned(), true).await;
+                                        },
+                                        Icon { name: "volume_down" }
+                                    }
                                 }
                             }
-                            else{
-                                if volume>=0.5{
-                                    button {
-                                        onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(0.0));changeMute(playdata.to_owned(), true).await;},
-                                        Icon{name:"volume_up"}
-                                    }
-                                }else{
-                                    button {
-                                        onclick: move |_| async move {play_coroutine_handle.send(PlayAction::SetVolume(0.0));changeMute(playdata.to_owned(), true).await;},
-                                        Icon{name:"volume_down"}
-                                    }
-                                }
-                            }
-                            div{class:"volume_container",
+                            div { class: "volume_container",
                                 input {
                                     r#type: "range",
                                     id: "volume",
@@ -369,8 +379,7 @@ pub fn PlayBar() -> Element {
                                     oninput: move |e| async move {
                                         play_coroutine_handle.send(PlayAction::SetVolume(e.value().parse().unwrap()));
                                         changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;
-                                    },
-                                    // onchange: move |e| async move {changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;},
+                                    }
                                 }
                                 div {
                                     class: "volume",
@@ -384,7 +393,9 @@ pub fn PlayBar() -> Element {
             }
         }
     } else {
-        rsx! { Outlet::<crate::Route> {} }
+        rsx! {
+            Outlet::<crate::Route> {}
+        }
     }
 }
 
@@ -576,6 +587,7 @@ async fn download(id: u64) -> Result<(), Box<dyn Error>> {
         .url
         .to_owned();
     let response = reqwest::get(url).await?;
+    fs::create_dir_all("cache/")?;
     let mut file = File::create(format!("cache/{}", id))?;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {

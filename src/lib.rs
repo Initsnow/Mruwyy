@@ -1,4 +1,7 @@
-use std::{sync::{Arc, Mutex, RwLock}, time::{Duration, Instant}};
+use std::{
+    sync::{Arc, Mutex, RwLock},
+    time::{Duration, Instant},
+};
 
 use chrono::{Local, TimeZone};
 
@@ -17,7 +20,10 @@ pub mod api {
     use lazy_static::lazy_static;
     pub use ncm_api::*;
 
-    use std::{fs, io, sync::{Arc, Mutex}};
+    use std::{
+        fs, io,
+        sync::{Arc, Mutex},
+    };
     const BASE_URL_LIST: [&str; 12] = [
         "https://music.163.com/",
         "https://music.163.com/eapi/clientlog",
@@ -141,16 +147,15 @@ pub mod play {
         pub fn new() -> Self {
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let sink = Sink::try_new(&stream_handle).unwrap();
-            Self {
-                sink,
-                _stream,
-            }
+            Self { sink, _stream }
         }
 
         pub fn restart(&mut self, id: u64) {
             let file = File::open(format!("cache/{}", id)).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
-            TIME.write().unwrap().update_total(rodio::Source::total_duration(&source).unwrap());
+            TIME.write()
+                .unwrap()
+                .update_total(rodio::Source::total_duration(&source).unwrap());
             self.sink.stop();
             self.sink.append(source);
 
@@ -201,50 +206,56 @@ pub struct Time {
     pub total_time: Option<Duration>,
     pub instant: Option<Instant>,
     //true + \ false -
-    offset: (u64,bool),
+    offset: (u64, bool),
 }
 use lazy_static::lazy_static;
 lazy_static! {
-    pub static ref TIME:Arc<RwLock<Time>> = Arc::new(RwLock::new(Time::new()));
+    pub static ref TIME: Arc<RwLock<Time>> = Arc::new(RwLock::new(Time::new()));
 }
 
 impl Time {
-    fn new()->Self{
+    fn new() -> Self {
         Time {
             total_time: None,
             instant: None,
-            offset:(0,false)
+            offset: (0, false),
         }
     }
-    fn update_total(&mut self,total:Duration){
-        self.total_time=Some(total);
+    fn update_total(&mut self, total: Duration) {
+        self.total_time = Some(total);
     }
-    pub fn flash(&mut self){
-        self.instant=Some(Instant::now());
-        self.offset=(0,false);
+    pub fn flash(&mut self) {
+        self.instant = Some(Instant::now());
+        self.offset = (0, false);
     }
-    pub fn get_current_millis(&self)->u64{
-        if let Some(v)=self.instant{
-            let offset=self.offset;
+    pub fn get_current_millis(&self) -> u64 {
+        if let Some(v) = self.instant {
+            let offset = self.offset;
             if offset.1 {
-            v.elapsed().as_millis() as u64 + offset.0}else{v.elapsed().as_millis() as u64 - offset.0}
-            
-        }else{0}
+                v.elapsed().as_millis() as u64 + offset.0
+            } else {
+                v.elapsed().as_millis() as u64 - offset.0
+            }
+        } else {
+            0
+        }
     }
-    pub fn get_total_millis(&self)->u64{
-        if let Some(v)=self.total_time{
+    pub fn get_total_millis(&self) -> u64 {
+        if let Some(v) = self.total_time {
             v.as_millis() as u64
-        }else{0}
+        } else {
+            0
+        }
     }
-    pub fn set(&mut self,to:u64){
-        if let Some(v)=self.instant{
-            let v=v.elapsed().as_millis() as u64;
-            if to >= v{
-                dbg!(to-v);
-                self.offset=(to-v,true);
-            }else{
-                dbg!(v-to);
-                self.offset=(v-to,false) ;
+    pub fn set(&mut self, to: u64) {
+        if let Some(v) = self.instant {
+            let v = v.elapsed().as_millis() as u64;
+            if to >= v {
+                dbg!(to - v);
+                self.offset = (to - v, true);
+            } else {
+                dbg!(v - to);
+                self.offset = (v - to, false);
             }
         }
     }

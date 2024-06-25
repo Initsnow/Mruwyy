@@ -33,7 +33,5 @@ pub fn AlbumDetail(album_id: u64) -> Element {
                 Loading {}
             }
         }
-
-
     }
 }

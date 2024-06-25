@@ -42,31 +42,31 @@ pub fn AccountDetail() -> Element {
             Ok((userlists, userfavoritelists))
         });
         rsx! {
-                    match &*future.read() {
-                        Some(Ok(response)) => rsx!{
-                            div{id:"user_info_container",
-                                img{class:"avatar",
-                                    src: "{avatar_url}",
-                                }
-                                div{id:"user_info",
-                                    h1 {"{name}"}
-                                }
-                                div{id:"background",background:"url({avatar_url}) center"}
-                            }
-                            div{id:"user_list_container",
-                                UserList{lists:response.0.to_owned()}
-                                UserFavoriteList{lists:response.1.to_owned()}
-                            }
-                        },
-                        Some(Err(e)) => rsx!{
-                            p {"Error: {e}"}
-                        },
-                        None => rsx!{
-                            Loading {}
+            match &*future.read() {
+                Some(Ok(response)) => rsx!{
+                    div{id:"user_info_container",
+                        img{class:"avatar",
+                            src: "{avatar_url}",
                         }
+                        div{id:"user_info",
+                            h1 {"{name}"}
+                        }
+                        div{id:"background",background:"url({avatar_url}) center"}
+                    }
+                    div{id:"user_list_container",
+                        UserList{lists:response.0.to_owned()}
+                        UserFavoriteList{lists:response.1.to_owned()}
+                    }
+                },
+                Some(Err(e)) => rsx!{
+                    p {"Error: {e}"}
+                },
+                None => rsx!{
+                    Loading {}
                 }
+            }
         }
     } else {
-        rsx! {"账户未登录"}
+        rsx! { "账户未登录" }
     }
 }
