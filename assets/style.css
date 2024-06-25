@@ -17,6 +17,18 @@
     background-color: rgba(181, 164, 164, 0.2);
 }
 
+input[type='range']::-webkit-slider-runnable-track{
+    background-color: rgba(255, 255, 255, 0.58);
+    height: 0.25rem;
+}
+input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 13px;
+    width: 13px;
+    cursor: pointer;
+    margin-top: -0.25rem;
+}
+
 body {
     display: flex;
     height: 100vh;
@@ -596,6 +608,9 @@ button {
     opacity: 1;
 }
 
+
+
+
 .controls {
     align-items: center;
     display: grid;
@@ -611,10 +626,12 @@ button {
     position: relative;
     display: flex;
     align-items: center;
+    width: 84px;
 }
 
 .volume_container #volume{
     height: 5px;
+    width: 100%;
 }
 
 .volume{

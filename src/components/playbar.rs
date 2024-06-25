@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use futures_util::StreamExt;
 use lib::api;
 use lib::play::Player;
+use lib::TIME;
 use ncm_api::SongInfo;
 use rand::Rng;
 use std::error::Error;
@@ -50,9 +51,9 @@ pub fn PlayBar() -> Element {
                     let mut time = time.to_owned();
                     loop {
                         if *flag1.lock().unwrap() {
-                            time.write().1 = player.read().unwrap().current_total_time;
-                            time.write().0 += 1;
-                            sleep(Duration::from_secs(1)).await;
+                            time.write().1 = TIME.read().unwrap().get_total_millis();
+                            time.write().0 =TIME.read().unwrap().get_current_millis();
+                            sleep(Duration::from_secs_f32(0.3)).await;
                         } else {
                             sleep(Duration::from_secs_f32(0.5)).await;
                         }
@@ -73,9 +74,11 @@ pub fn PlayBar() -> Element {
                         }
                         Timer::SetTime(t) => {
                             time.write().0 = t;
+                            TIME.write().unwrap().set(t);
                         }
                         Timer::Set(t) => {
                             time.write().0 = t;
+                            TIME.write().unwrap().set(t);
                             player_clone.read().unwrap().seek(t);
                         }
                     }
@@ -87,7 +90,6 @@ pub fn PlayBar() -> Element {
         let playdata = playdata.to_owned();
         let player_clone = player.clone();
         let player_clone_ = player.clone();
-        let time = time.clone();
 
         async move {
             spawn(async move {
@@ -211,6 +213,7 @@ pub fn PlayBar() -> Element {
                     id: "progress",
                     max: "{time.read().1}",
                     value: "{time.read().0}",
+                    step: 1000,
                     oninput: move |e| {
                         use_coroutine_handle::<Timer>().send(Timer::SetTime(e.value().parse().unwrap()));
                     },
@@ -221,8 +224,8 @@ pub fn PlayBar() -> Element {
                 if time.read().1 != 0 {
                     div {
                         class: "time",
-                        left: "{time.read().0 as f32 / time.read().1 as f32 * 100.0}%",
-                        "{time.read().0 / 60}:{time.read().0 % 60:02}"
+                        left: "{time.read().0 as u64 as f64 / time.read().1 as u64 as f64 * 100.0}%",
+                        "{time.read().0 / 1000 / 60}:{time.read().0 / 1000 % 60:02}"
                     }
                 }
                 div {

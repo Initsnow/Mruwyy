@@ -1,3 +1,5 @@
+use std::{sync::{Arc, Mutex, RwLock}, time::{Duration, Instant}};
+
 use chrono::{Local, TimeZone};
 
 pub fn getdate(timestamp_in_millis: i64) -> String {
@@ -124,18 +126,15 @@ pub mod api {
 pub mod play {
 
     use rodio::{Decoder, OutputStream, Sink};
-    use std::sync::Mutex;
     use std::time::Duration;
 
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
-
     use std::{fs::File, io::BufReader};
+
+    use crate::TIME;
 
     pub struct Player {
         sink: Sink,
         _stream: OutputStream,
-        pub current_total_time: u64,
     }
 
     impl Player {
@@ -145,15 +144,13 @@ pub mod play {
             Self {
                 sink,
                 _stream,
-                current_total_time: 0,
             }
         }
 
         pub fn restart(&mut self, id: u64) {
             let file = File::open(format!("cache/{}", id)).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
-            let total_duration = rodio::Source::total_duration(&source).unwrap().as_secs();
-            self.current_total_time = total_duration;
+            TIME.write().unwrap().update_total(rodio::Source::total_duration(&source).unwrap());
             self.sink.stop();
             self.sink.append(source);
 
@@ -175,6 +172,7 @@ pub mod play {
 
         pub fn play(&self) {
             self.sink.play();
+            TIME.write().unwrap().flash();
         }
 
         pub fn pause(&self) {
@@ -194,7 +192,60 @@ pub mod play {
         }
 
         pub fn seek(&self, time: u64) {
-            self.sink.try_seek(Duration::from_secs(time)).unwrap();
+            self.sink.try_seek(Duration::from_millis(time)).unwrap();
+        }
+    }
+}
+
+pub struct Time {
+    pub total_time: Option<Duration>,
+    pub instant: Option<Instant>,
+    //true + \ false -
+    offset: (u64,bool),
+}
+use lazy_static::lazy_static;
+lazy_static! {
+    pub static ref TIME:Arc<RwLock<Time>> = Arc::new(RwLock::new(Time::new()));
+}
+
+impl Time {
+    fn new()->Self{
+        Time {
+            total_time: None,
+            instant: None,
+            offset:(0,false)
+        }
+    }
+    fn update_total(&mut self,total:Duration){
+        self.total_time=Some(total);
+    }
+    pub fn flash(&mut self){
+        self.instant=Some(Instant::now());
+        self.offset=(0,false);
+    }
+    pub fn get_current_millis(&self)->u64{
+        if let Some(v)=self.instant{
+            let offset=self.offset;
+            if offset.1 {
+            v.elapsed().as_millis() as u64 + offset.0}else{v.elapsed().as_millis() as u64 - offset.0}
+            
+        }else{0}
+    }
+    pub fn get_total_millis(&self)->u64{
+        if let Some(v)=self.total_time{
+            v.as_millis() as u64
+        }else{0}
+    }
+    pub fn set(&mut self,to:u64){
+        if let Some(v)=self.instant{
+            let v=v.elapsed().as_millis() as u64;
+            if to >= v{
+                dbg!(to-v);
+                self.offset=(to-v,true);
+            }else{
+                dbg!(v-to);
+                self.offset=(v-to,false) ;
+            }
         }
     }
 }
