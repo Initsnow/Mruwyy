@@ -322,6 +322,28 @@ pub fn Icon(name: String) -> Element {
                 path { "d": "M444-444H240v-72h204v-204h72v204h204v72H516v204h-72v-204Z" }
             }
         }
+    } else if name == "arrow down" {
+        rsx! {
+            svg {
+                "fill": "#e8eaed",
+                height: "24px",
+                width: "24px",
+                "viewBox": "0 -960 960 960",
+                "xmlns": "http://www.w3.org/2000/svg",
+                path { "d": "M480-361q-8 0-15-2.5t-13-8.5L268-556q-11-11-11-28t11-28q11-11 28-11t28 11l156 156 156-156q11-11 28-11t28 11q11 11 11 28t-11 28L508-372q-6 6-13 8.5t-15 2.5Z" }
+            }
+        }
+    } else if name == "arrow up" {
+        rsx! {
+            svg {
+                "viewBox": "0 -960 960 960",
+                "xmlns": "http://www.w3.org/2000/svg",
+                width: "24px",
+                "fill": "#e8eaed",
+                height: "24px",
+                path { "d": "M480-528 296-344l-56-56 240-240 240 240-56 56-184-184Z" }
+            }
+        }
     } else {
         rsx! {
             svg {

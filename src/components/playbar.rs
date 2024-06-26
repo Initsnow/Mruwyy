@@ -15,6 +15,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::time::sleep;
+use crate::components::loading::Loading;
+
 
 pub enum PlayAction {
     Start,
@@ -38,6 +40,7 @@ pub enum Timer {
 pub fn PlayBar() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
     let player = Arc::new(RwLock::new(Player::new()));
+    let mut lyric_show = use_signal(|| false);
     let time = use_signal_sync(|| (0, 0));
     let timer_coroutine_handle: Coroutine<Timer> =
         use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
@@ -196,14 +199,241 @@ pub fn PlayBar() -> Element {
             name,
             pic_url,
             singer,
+            id,
             ..
         } = s;
 
         let time = time.clone();
         let likesongs = &api::LIKE_SONGS_LIST;
-
         let volume = playdata.read().read().unwrap().volume;
+
+        let lyric_future = use_resource(move || async move {
+            let api = &api::CLIENT;
+            api.song_lyric_new(id).await
+        });
+
         rsx! {
+            if *lyric_show.read() {
+                div { id: "lyric_container",
+                    div { class: "left",
+                        img { class: "song_cover", src: "{pic_url}" }
+
+                        div { class: "container",
+                            div { class: "title&singer",
+                                h4 { "{name}" }
+                                Link {
+                                    class: "singer",
+                                    to: Route::SingerDetail {
+                                        singer_name: singer.clone(),
+                                    },
+                                    "{singer}"
+                                }
+                            }
+                            div { class: "volume_controls",
+                                if playdata.read().read().unwrap().mute {
+                                    button {
+                                        onclick: move |_| async move {
+                                            play_coroutine_handle.send(PlayAction::SetVolume(volume));
+                                            changeMute(playdata.to_owned(), false).await;
+                                        },
+                                        Icon { name: "no_sound" }
+                                    }
+                                } else {
+                                    if volume >= 0.5 {
+                                        button {
+                                            onclick: move |_| async move {
+                                                play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                                changeMute(playdata.to_owned(), true).await;
+                                            },
+                                            Icon { name: "volume_up" }
+                                        }
+                                    } else {
+                                        button {
+                                            onclick: move |_| async move {
+                                                play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                                changeMute(playdata.to_owned(), true).await;
+                                            },
+                                            Icon { name: "volume_down" }
+                                        }
+                                    }
+                                }
+                                div { class: "volume_container",
+                                    input {
+                                        r#type: "range",
+                                        id: "volume",
+                                        max: "1",
+                                        step: "0.01",
+                                        value: "{volume}",
+                                        oninput: move |e| async move {
+                                            play_coroutine_handle.send(PlayAction::SetVolume(e.value().parse().unwrap()));
+                                            changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;
+                                        }
+                                    }
+                                    div {
+                                        class: "volume",
+                                        left: "{volume * 100.0}%",
+                                        "{volume * 100.0:.0}"
+                                    }
+                                }
+                            }
+                            if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
+                                button {
+                                    onclick: move |_| async move {
+                                        let api = &api::CLIENT;
+                                        let currentsongid = playdata
+                                            .read()
+                                            .read()
+                                            .unwrap()
+                                            .to_owned()
+                                            .play_current_id
+                                            .unwrap();
+                                        let r = api.like(false, currentsongid).await;
+                                        if r {
+                                            likesongs.remove(currentsongid).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite_fill" }
+                                }
+                            } else {
+                                button {
+                                    onclick: move |_| async move {
+                                        let api = &api::CLIENT;
+                                        let currentsongid = playdata
+                                            .read()
+                                            .read()
+                                            .unwrap()
+                                            .to_owned()
+                                            .play_current_id
+                                            .unwrap();
+                                        let r = api.like(true, currentsongid).await;
+                                        if r {
+                                            likesongs.add(currentsongid).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite" }
+                                }
+                            }
+                        }
+                        div { class: "container",
+                            if time.read().1 != 0 {
+                                div { class: "time",
+                                    "{time.read().0 / 1000 / 60}:{time.read().0 / 1000 % 60:02}"
+                                }
+                            }
+                            input {
+                                r#type: "range",
+                                id: "progress",
+                                max: "{time.read().1}",
+                                value: "{time.read().0}",
+                                step: 1000,
+                                oninput: move |e| {
+                                    use_coroutine_handle::<Timer>().send(Timer::SetTime(e.value().parse().unwrap()));
+                                },
+                                onchange: move |e| {
+                                    use_coroutine_handle::<Timer>().send(Timer::Set(e.value().parse().unwrap()));
+                                }
+                            }
+                            if time.read().1 != 0 {
+                                div { class: "time",
+                                    "{time.read().1 / 1000 / 60}:{time.read().1 / 1000 % 60:02}"
+                                }
+                            }
+                        }
+                        div { class: "container",
+                            if playdata.read().read().unwrap().mode == PlayMode::Normal {
+                                button {
+                                    onclick: move |_| async move {
+                                        changeMode(playdata.to_owned(), PlayMode::Loop).await;
+                                    },
+                                    Icon { name: "repeat" }
+                                }
+                            } else if playdata.read().read().unwrap().mode == PlayMode::Loop {
+                                button {
+                                    onclick: move |_| async move {
+                                        changeMode(playdata.to_owned(), PlayMode::Single).await;
+                                    },
+                                    Icon { name: "repeat_on" }
+                                }
+                            } else if playdata.read().read().unwrap().mode == PlayMode::Single {
+                                button {
+                                    onclick: move |_| async move {
+                                        changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                    },
+                                    Icon { name: "repeat_one_on" }
+                                }
+                            }
+                            div { class: "middle",
+                                button { onclick: move |_| play_coroutine_handle.send(PlayAction::Previous),
+                                    Icon { name: "skip_previous" }
+                                }
+                                if playdata.read().read().unwrap().play_flag {
+                                    button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause),
+                                        Icon { name: "pause" }
+                                    }
+                                } else {
+                                    button { onclick: move |_| play_coroutine_handle.send(PlayAction::Resume),
+                                        Icon { name: "play_arrow" }
+                                    }
+                                }
+                                button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next),
+                                    Icon { name: "skip_next" }
+                                }
+                            }
+                            if playdata.read().read().unwrap().mode == PlayMode::Random {
+                                button {
+                                    onclick: move |_| async move {
+                                        changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                    },
+                                    Icon { name: "shuffle_on" }
+                                }
+                            } else {
+                                button {
+                                    onclick: move |_| async move {
+                                        changeMode(playdata.to_owned(), PlayMode::Random).await;
+                                    },
+                                    Icon { name: "shuffle" }
+                                }
+                            }
+                        }
+                    }
+                    div { class: "right",
+                        div { id: "lyrics" ,
+                        match &*lyric_future.read() {
+                            Some(Ok(response)) => rsx! {
+                                for (index,lyric) in response.lyric.iter().enumerate(){
+                                    div{
+                                       id: "line{index}",
+                                       class: "line",
+                                       div{
+                                        class:"content",
+                                        span{
+                                            "{lyric}"
+                                        }
+                                       }
+                                    }
+                                }
+
+
+                            },
+                            Some(Err(e)) => rsx!{
+                                p {"Error: {e}"}
+                            },
+                            None => rsx!{
+                                Loading {}
+                            }
+                        }
+                    }
+                    }
+                    div { class: "close",
+                        button {
+                            onclick: move |_| async move {
+                                lyric_show.set(false);
+                            },
+                            Icon { name: "arrow down" }
+                        }
+                    }
+                }
+            }
             Outlet::<crate::Route> {}
             div { id: "playbar", class: "acrylic",
                 input {
@@ -239,43 +469,41 @@ pub fn PlayBar() -> Element {
                                 "{singer}"
                             }
                         }
-                        div { class: "control",
-                            if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
-                                div {
-                                    onclick: move |_| async move {
-                                        let api = &api::CLIENT;
-                                        let currentsongid = playdata
-                                            .read()
-                                            .read()
-                                            .unwrap()
-                                            .to_owned()
-                                            .play_current_id
-                                            .unwrap();
-                                        let r = api.like(false, currentsongid).await;
-                                        if r {
-                                            likesongs.remove(currentsongid).await;
-                                        }
-                                    },
-                                    Icon { name: "favorite_fill" }
-                                }
-                            } else {
-                                div {
-                                    onclick: move |_| async move {
-                                        let api = &api::CLIENT;
-                                        let currentsongid = playdata
-                                            .read()
-                                            .read()
-                                            .unwrap()
-                                            .to_owned()
-                                            .play_current_id
-                                            .unwrap();
-                                        let r = api.like(true, currentsongid).await;
-                                        if r {
-                                            likesongs.add(currentsongid).await;
-                                        }
-                                    },
-                                    Icon { name: "favorite" }
-                                }
+                        if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
+                            button {
+                                onclick: move |_| async move {
+                                    let api = &api::CLIENT;
+                                    let currentsongid = playdata
+                                        .read()
+                                        .read()
+                                        .unwrap()
+                                        .to_owned()
+                                        .play_current_id
+                                        .unwrap();
+                                    let r = api.like(false, currentsongid).await;
+                                    if r {
+                                        likesongs.remove(currentsongid).await;
+                                    }
+                                },
+                                Icon { name: "favorite_fill" }
+                            }
+                        } else {
+                            button {
+                                onclick: move |_| async move {
+                                    let api = &api::CLIENT;
+                                    let currentsongid = playdata
+                                        .read()
+                                        .read()
+                                        .unwrap()
+                                        .to_owned()
+                                        .play_current_id
+                                        .unwrap();
+                                    let r = api.like(true, currentsongid).await;
+                                    if r {
+                                        likesongs.add(currentsongid).await;
+                                    }
+                                },
+                                Icon { name: "favorite" }
                             }
                         }
                     }
@@ -387,6 +615,12 @@ pub fn PlayBar() -> Element {
                                     "{volume * 100.0:.0}"
                                 }
                             }
+                        }
+                        button {
+                            onclick: move |_| async move {
+                                lyric_show.set(true);
+                            },
+                            Icon { name: "arrow up" }
                         }
                     }
                 }
