@@ -5,10 +5,10 @@ use dioxus::prelude::*;
 use lib::api;
 use lib::getdate;
 use ncm_api::*;
-use tracing::info;
 use std::sync::RwLock;
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::info;
 
 // 首页推荐歌单
 #[component]
@@ -49,10 +49,10 @@ pub fn ListWithAuthor(name: String, cover_url: String, id: u64, author: String) 
 
 #[derive(PartialEq, Clone)]
 pub struct Track {
-    name: String,
-    cover_url: String,
+    pub name: String,
+    pub cover_url: String,
     pub author: String,
-    id: u64,
+    pub id: u64,
 }
 
 #[derive(Default, Props, PartialEq, Clone)]

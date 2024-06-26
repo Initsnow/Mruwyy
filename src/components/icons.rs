@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-
 #[component]
 pub fn Icon(name: String) -> Element {
     if name == "account_circle" {

@@ -1,12 +1,9 @@
 use std::{sync::RwLock, thread::sleep, time::Duration};
-
 use dioxus::prelude::*;
 use lib::api;
 use ncm_api::SongInfo;
 use tracing::info;
-
 use crate::{components::icons::Icon, Play, PlayMode, Route};
-
 #[component]
 pub fn PlayList() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
@@ -14,27 +11,21 @@ pub fn PlayList() -> Element {
     let playmode;
     {
         let play = playdata.read().read().unwrap().to_owned();
-        if let Play {
-            play_list: Some(tracklist),
-            mode,
-            ..
-        } = play
-        {
+        if let Play { play_list: Some(tracklist), mode, .. } = play {
             tracks = tracklist;
             playmode = mode;
         } else {
-            return rsx!("Can't Get PlayData");
+            return rsx!( "Can't Get PlayData" );
         }
     }
-
     if let PlayMode::Random = playmode {
-        return rsx!("Random Mode is enabled.");
+        return rsx!( "Random Mode is enabled." );
     } else {
-        rsx!(TrackList { tracks })
+        rsx!(
+            TrackList { tracks }
+        )
     }
 }
-
-// 歌单详情内的歌曲列表
 #[component]
 pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
     use crate::components::playbar::PlayAction;
@@ -63,7 +54,6 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
             "#,
         );
     }
-
     fn play(current_id: u64, tracks: Vec<SongInfo>) {
         let mut playdata = use_context::<Signal<RwLock<crate::Play>>>();
         loop {
@@ -78,9 +68,7 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
             sleep(Duration::from_secs(2))
         }
     }
-
     let tracks_signal = use_signal(|| tracks.clone());
-    // let likesongs = &api::LIKE_SONGS_LIST;
     let mut likesongs = use_signal(|| &api::LIKE_SONGS_LIST);
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
     let current_id = playdata.read().read().unwrap().to_owned().play_current_id;
@@ -160,7 +148,8 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                 }
                             }
                             div { class: "duration",
-                                {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
+                                { format!("{}:{:02}", track.duration / 1000 / 60,
+                                track.duration / 1000 % 60) }
                             }
                         }
                         h1 { "即将播放" }
@@ -200,38 +189,38 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                     "{track.album}"
                                 }
                             }
-                                if likesongs.read().check(track.id) {
-                                    div {
-                                        class: "like",
-                                        onclick: move |e| async move {
-                                            e.stop_propagation();
-                                            let api = &api::CLIENT;
-                                            let r = api.like(false, track.id).await;
-                                            info!("取消收藏:{}", r);
-                                            if r {
-                                                likesongs.write().remove(track.id).await;
-                                            }
-                                        },
-                                        Icon { name: "favorite_fill" }
-                                    }
-                                } else {
-                                    div {
-                                        class: "like",
-                                        onclick: move |e| async move {
-                                            e.stop_propagation();
-                                            let api = &api::CLIENT;
-                                            let r = api.like(true, track.id).await;
-                                            info!("收藏:{}", r);
-                                            if r {
-                                                likesongs.write().add(track.id).await;
-                                            }
-                                        },
-                                        Icon { name: "favorite" }
-                                    }
+                            if likesongs.read().check(track.id) {
+                                div {
+                                    class: "like",
+                                    onclick: move |e| async move {
+                                        e.stop_propagation();
+                                        let api = &api::CLIENT;
+                                        let r = api.like(false, track.id).await;
+                                        info!("取消收藏:{}", r);
+                                        if r {
+                                            likesongs.write().remove(track.id).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite_fill" }
                                 }
-                            
+                            } else {
+                                div {
+                                    class: "like",
+                                    onclick: move |e| async move {
+                                        e.stop_propagation();
+                                        let api = &api::CLIENT;
+                                        let r = api.like(true, track.id).await;
+                                        info!("收藏:{}", r);
+                                        if r {
+                                            likesongs.write().add(track.id).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite" }
+                                }
+                            }
                             div { class: "duration",
-                                {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
+                                { format!("{}:{:02}", track.duration / 1000 / 60, track.duration /
+                                1000 % 60) }
                             }
                         }
                     }
