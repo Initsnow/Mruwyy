@@ -126,6 +126,9 @@ fn App() -> Element {
                 .map(|x| x.id)
                 .collect::<Vec<u64>>()[0];
             info!("获取到用户喜欢音乐歌单:{}", t);
+            // dbg!(api.songs_url_v1(&[1965786312,2150753897], "jymaster").await);
+            // dbg!(api.songs_music_detail(2150753897).await);
+
             status.write().write().unwrap().login = Some(AccountInfo {
                 name: login_info.nickname,
                 uid: login_info.uid,

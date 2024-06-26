@@ -10,3 +10,4 @@ pub mod playlist;
 pub mod sidebar;
 pub mod singer;
 pub mod stars;
+pub mod settings;

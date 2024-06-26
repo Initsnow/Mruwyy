@@ -806,7 +806,7 @@ fn check_cache(id: u64) -> bool {
 }
 async fn download(id: u64) -> Result<(), Box<dyn Error>> {
     let api = &api::CLIENT;
-    let url = api.songs_url(&[id], "12800").await.unwrap()[0].url.to_owned();
+    let url = api.songs_url_v1(&[id], "jymaster").await.unwrap()[0].url.to_owned();
     let response = reqwest::get(url).await?;
     fs::create_dir_all(SONG_CACHE_DIR.as_path())?;
     let mut file = File::create(SONG_CACHE_DIR.join(id.to_string()))?;
