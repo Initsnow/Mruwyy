@@ -158,7 +158,6 @@ pub mod play {
                 .update_total(rodio::Source::total_duration(&source).unwrap());
             self.sink.stop();
             self.sink.append(source);
-
             self.sink.set_volume(0.3);
             self.play();
         }
@@ -177,11 +176,12 @@ pub mod play {
 
         pub fn play(&self) {
             self.sink.play();
-            TIME.write().unwrap().flash();
+            TIME.write().unwrap().resume_or_flash();
         }
 
         pub fn pause(&self) {
             self.sink.pause();
+            TIME.write().unwrap().pause();
         }
 
         pub fn stop(&self) {
@@ -207,6 +207,7 @@ pub struct Time {
     pub instant: Option<Instant>,
     //true + \ false -
     offset: (u64, bool),
+    tmp: Option<u64>,
 }
 use lazy_static::lazy_static;
 lazy_static! {
@@ -219,6 +220,7 @@ impl Time {
             total_time: None,
             instant: None,
             offset: (0, false),
+            tmp: None,
         }
     }
     fn update_total(&mut self, total: Duration) {
@@ -251,12 +253,23 @@ impl Time {
         if let Some(v) = self.instant {
             let v = v.elapsed().as_millis() as u64;
             if to >= v {
-                dbg!(to - v);
                 self.offset = (to - v, true);
             } else {
-                dbg!(v - to);
                 self.offset = (v - to, false);
             }
+        }
+    }
+    fn pause(&mut self) {
+        self.tmp = Some(self.get_current_millis());
+    }
+    fn resume_or_flash(&mut self) {
+        if let Some(v) = self.tmp {
+            self.set(v);
+            println!("resume:{}", v);
+            self.tmp = None;
+        } else {
+            self.flash();
+            dbg!("flash");
         }
     }
 }
