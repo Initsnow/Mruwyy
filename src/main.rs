@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use lib::api;
 use ncm_api::SongInfo;
 use std::sync::RwLock;
-use tracing::{instrument::WithSubscriber, Level};
+use tracing::{info, Level};
 mod components;
 use components::{
     account::AccountDetail,
@@ -86,8 +86,6 @@ struct Play {
 fn main() {
     // Init logger
     dioxus_logger::init(Level::INFO).expect("failed to init logger");
-
-    //println!("style css location:{}", STYLE);
     dioxus::launch(App);
 }
 
@@ -110,7 +108,7 @@ fn App() -> Element {
         let userlike = &api::LIKE_SONGS_LIST;
         let api = &api::CLIENT;
         if let Ok(login_info) = api.login_status().await {
-            dbg!("已通过cookie登录");
+            info!("已通过cookie登录");
             let list: Vec<u64> = api.user_song_id_list(login_info.uid).await.unwrap();
             // use_context_provider(|| Signal::new(UserLike { list }));
             userlike.init(list).await;
@@ -127,7 +125,6 @@ fn App() -> Element {
         Router::<Route> {}
     }
 }
-
 
 #[component]
 fn PageNotFound(route: Vec<String>) -> Element {

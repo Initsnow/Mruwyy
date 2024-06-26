@@ -3,25 +3,23 @@ use std::{sync::RwLock, thread::sleep, time::Duration};
 use dioxus::prelude::*;
 use lib::api;
 use ncm_api::SongInfo;
+use tracing::info;
 
 use crate::{components::icons::Icon, Play, PlayMode, Route};
 
 #[component]
 pub fn PlayList() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
-    let currentid;
     let tracks;
     let playmode;
     {
         let play = playdata.read().read().unwrap().to_owned();
         if let Play {
-            play_current_id: Some(current),
             play_list: Some(tracklist),
             mode,
             ..
         } = play
         {
-            currentid = current;
             tracks = tracklist;
             playmode = mode;
         } else {
@@ -70,16 +68,13 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
         let mut playdata = use_context::<Signal<RwLock<crate::Play>>>();
         loop {
             if let Ok(t) = playdata.try_write() {
-                dbg!(1);
                 if let Ok(mut v) = t.write() {
-                    dbg!(2);
                     v.play_current_id = Some(current_id);
                     v.play_list = Some(tracks.clone());
                     use_coroutine_handle::<PlayAction>().send(PlayAction::Start);
                     break;
                 }
             }
-            dbg!(0);
             sleep(Duration::from_secs(2))
         }
     }
@@ -135,33 +130,33 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                     "{track.album}"
                                 }
                             }
-                            div { class: "like",
-                                if likesongs.read().check(track.id) {
-                                    div {
-                                        onclick: move |e| async move {
-                                            e.stop_propagation();
-                                            let api = &api::CLIENT;
-                                            let r = api.like(false, track.id).await;
-                                            dbg!("取消收藏:", r);
-                                            if r {
-                                                likesongs.write().remove(track.id).await;
-                                            }
-                                        },
-                                        Icon { name: "favorite_fill" }
-                                    }
-                                } else {
-                                    div {
-                                        onclick: move |e| async move {
-                                            e.stop_propagation();
-                                            let api = &api::CLIENT;
-                                            let r = api.like(true, track.id).await;
-                                            dbg!("收藏:", r);
-                                            if r {
-                                                likesongs.write().add(track.id).await;
-                                            }
-                                        },
-                                        Icon { name: "favorite" }
-                                    }
+                            if likesongs.read().check(track.id) {
+                                div {
+                                    class: "like",
+                                    onclick: move |e| async move {
+                                        e.stop_propagation();
+                                        let api = &api::CLIENT;
+                                        let r = api.like(false, track.id).await;
+                                        info!("取消收藏:{}", r);
+                                        if r {
+                                            likesongs.write().remove(track.id).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite_fill" }
+                                }
+                            } else {
+                                div {
+                                    class: "like",
+                                    onclick: move |e| async move {
+                                        e.stop_propagation();
+                                        let api = &api::CLIENT;
+                                        let r = api.like(true, track.id).await;
+                                        info!("收藏:{}", r);
+                                        if r {
+                                            likesongs.write().add(track.id).await;
+                                        }
+                                    },
+                                    Icon { name: "favorite" }
                                 }
                             }
                             div { class: "duration",
@@ -205,14 +200,14 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                     "{track.album}"
                                 }
                             }
-                            div { class: "like",
                                 if likesongs.read().check(track.id) {
                                     div {
+                                        class: "like",
                                         onclick: move |e| async move {
                                             e.stop_propagation();
                                             let api = &api::CLIENT;
                                             let r = api.like(false, track.id).await;
-                                            dbg!("取消收藏:", r);
+                                            info!("取消收藏:{}", r);
                                             if r {
                                                 likesongs.write().remove(track.id).await;
                                             }
@@ -221,11 +216,12 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                     }
                                 } else {
                                     div {
+                                        class: "like",
                                         onclick: move |e| async move {
                                             e.stop_propagation();
                                             let api = &api::CLIENT;
                                             let r = api.like(true, track.id).await;
-                                            dbg!("收藏:", r);
+                                            info!("收藏:{}", r);
                                             if r {
                                                 likesongs.write().add(track.id).await;
                                             }
@@ -233,7 +229,7 @@ pub fn TrackList(tracks: Vec<SongInfo>) -> Element {
                                         Icon { name: "favorite" }
                                     }
                                 }
-                            }
+                            
                             div { class: "duration",
                                 {format!("{}:{:02}", track.duration / 1000 / 60, track.duration / 1000 % 60)}
                             }

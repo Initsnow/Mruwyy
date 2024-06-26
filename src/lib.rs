@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
 
@@ -169,9 +169,7 @@ pub mod play {
 
             let file = File::open(format!("cache/{}", id)).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
-            dbg!(&rodio::Source::total_duration(&source));
             self.sink.append(source);
-            dbg!(self.sink.len());
         }
 
         pub fn play(&self) {
@@ -269,7 +267,6 @@ impl Time {
             self.tmp = None;
         } else {
             self.flash();
-            dbg!("flash");
         }
     }
 }

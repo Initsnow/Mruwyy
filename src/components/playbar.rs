@@ -9,6 +9,7 @@ use lib::TIME;
 use ncm_api::SongInfo;
 use rand::Rng;
 use regex::Regex;
+use tracing::{error, info};
 use std::error::Error;
 use std::fs::{self, File};
 use std::io::Write;
@@ -24,7 +25,7 @@ pub enum PlayAction {
     Previous,
     Pause,
     Resume,
-    Stop,
+    // Stop,
     SetVolume(f32),
 }
 
@@ -136,11 +137,11 @@ pub fn PlayBar() -> Element {
                         update_play_flag(playdata.clone(), true).await;
                         timer_coroutine_handle.clone().send(Timer::Start);
                     }
-                    PlayAction::Stop => {
-                        player_clone.read().unwrap().stop();
-                        update_play_flag(playdata.clone(), false).await;
-                        timer_coroutine_handle.clone().send(Timer::Stop);
-                    }
+                    // PlayAction::Stop => {
+                    //     player_clone.read().unwrap().stop();
+                    //     update_play_flag(playdata.clone(), false).await;
+                    //     timer_coroutine_handle.clone().send(Timer::Stop);
+                    // }
                     PlayAction::Next => {
                         dbg!("Next?");
                         handle_play_action_next(
@@ -205,13 +206,13 @@ pub fn PlayBar() -> Element {
         /// 歌词翻译
         pub tlyric: Option<Vec<String>>,
         /// 逐字歌词
-        pub yrc: Option<Vec<String>>,
+        // pub yrc: Option<Vec<String>>,
         /// 罗马字
         pub romalrc: Option<Vec<String>>,
     }
+
     fn get_lrc_millis(text: &str) -> Option<u64> {
         let re = Regex::new(r"^\[(\d{2}):(\d{2})\.(\d{1,3})\]").unwrap();
-
         if let Some(captures) = re.captures(text) {
             // 提取分钟、秒和毫秒
             let minutes: u64 = captures[1].parse().unwrap();
@@ -233,7 +234,15 @@ pub fn PlayBar() -> Element {
         if let Some(rd) = get_lrc_millis(text) {
             Some((rd, re.replace(text, "").to_string()))
         } else {
-            println!("无法处理{}", text);
+            // println!("无法处理{}", text);
+            None
+        }
+    }
+    fn replace_lrc(text: String) -> Option<String> {
+        let re = Regex::new(r"^\[(\d{2}):(\d{2})\.(\d{1,3})\]").unwrap();
+        if re.is_match(&text) {
+            Some(re.replace(&text, "").to_string())
+        } else {
             None
         }
     }
@@ -257,6 +266,7 @@ pub fn PlayBar() -> Element {
             match result {
                 Ok(v) => {
                     let mut tmp: Vec<(u64, String)> = Vec::new();
+                    // dbg!(&v.romalrc);
                     for i in v.lyric {
                         if let Some(v) = progress_lrc(&i) {
                             tmp.push(v);
@@ -279,9 +289,25 @@ pub fn PlayBar() -> Element {
                     }
                     Ok(Lyrics {
                         lyric: vec,
-                        tlyric: v.tlyric,
-                        yrc: v.yrc,
-                        romalrc: v.romalrc,
+                        tlyric: if let Some(v) = v.tlyric {
+                            Some(
+                                v.into_iter()
+                                    .filter_map(|e| replace_lrc(e))
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            None
+                        },
+                        // yrc: v.yrc,
+                        romalrc: if let Some(v) = v.romalrc {
+                            Some(
+                                v.into_iter()
+                                    .filter_map(|e| replace_lrc(e))
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            None
+                        },
                     })
                 }
                 Err(err) => Err(err),
@@ -476,7 +502,7 @@ pub fn PlayBar() -> Element {
                         div { id: "lyrics",
                             match &*lyric_future.read() {
                                 Some(Ok(response)) => rsx! {
-                                    for (index,lyric) in response.lyric.iter().enumerate(){
+                                    for (index,lyric) in response.lyric.clone().into_iter().enumerate(){
                                         div{
                                         id: "line{index}",
                                         class: if lyric.0 <= time.read().0 && time.read().0< lyric.1{
@@ -492,10 +518,27 @@ pub fn PlayBar() -> Element {
                                         }
                                             "line highlight"
                                         }else{"line"},
+                                        onclick: move |_| async move {
+                                            use_coroutine_handle::<Timer>().send(Timer::Set(lyric.0));
+                                        },
                                         div{
                                             class:"content",
+                                            if response.romalrc.is_some(){
+                                                span {
+                                                    class:"romaji",
+                                                    "{response.romalrc.as_ref().unwrap()[index]}"
+                                                }
+                                                br{}
+                                            }
                                             span{
                                                 "{lyric.2}"
+                                            }
+                                            if response.tlyric.is_some(){
+                                                br{}
+                                                span {
+                                                    class:"translation",
+                                                    "{response.tlyric.as_ref().unwrap()[index]}"
+                                                }
                                             }
                                         }
                                         }
@@ -753,7 +796,7 @@ async fn handle_play_action_start(
                 preload(playdata.clone()).await;
             }
             Err(e) => {
-                dbg!(e);
+                error!(e);
             }
         }
     }
@@ -946,14 +989,14 @@ async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
 
                 for e in slice.clone() {
                     if check_cache(e) {
-                        dbg!("预加载 {} 成功，击中缓存", e);
+                        info!("预加载 {} 成功，击中缓存", e);
                     } else {
                         match download(e).await {
                             Ok(_) => {
-                                dbg!("预加载 {} 成功，成功下载", e);
+                                info!("预加载 {} 成功，成功下载", e);
                             }
                             Err(err) => {
-                                dbg!(err);
+                                error!(err);
                             }
                         }
                     }

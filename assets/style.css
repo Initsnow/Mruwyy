@@ -382,17 +382,23 @@ body {
     height: 16px;
     margin: 0 5px;
     cursor: pointer;
+    z-index: 2;
 }
 
 .track .like svg {
     fill: var(--systemThemeColor);
     width: 16px;
     height: 16px;
+    transition: all 0.3s;
 }
 
 .track .like svg.false {
     opacity: 0;
 }
+.track .like:hover svg{
+    opacity: 100;
+}
+
 
 .title\&singer {
     flex: 1;
@@ -855,6 +861,22 @@ button:hover {
 
 #lyric_container .line span {
     opacity: .28;
+}
+
+#lyric_container .line span.translation {
+    font-size: large;
+}
+
+#lyric_container .line span.romaji {
+    font-size: xx-small;
+}
+
+#lyric_container .highlight span.romaji {
+    opacity: .48;
+}
+
+#lyric_container .highlight span.translation {
+    opacity: .58;
 }
 
 #lyric_container .highlight span {

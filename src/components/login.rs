@@ -30,7 +30,7 @@ pub fn LoginWithUsernameAndPwd() -> Element {
                                 data.values().get("pwd").unwrap().as_value(),
                             )
                             .await;
-                        dbg!(result);
+                        dbg!(result.unwrap());
                         dbg!(api.cookie_jar());
                     });
                 },
@@ -124,19 +124,18 @@ pub fn LoginWithQrcode(error: Signal<Option<String>>) -> Element {
             p{
                 "{qrmsg.read()}"
             }
-            button{
-                onclick: move |event| {
-                    spawn(async move {
-                        println!("Clicked! {event:?}");
-                        let api=&api::CLIENT;
-                        let a:String = unikey.read().to_string();
-                        let b=api.login_qr_check(a).await;
-                        dbg!(b);
-                        dbg!(api.cookie_jar());
-                    });
-                },
-                "Click"
-            }
+            // button{
+            //     onclick: move |event| {
+            //         spawn(async move {
+            //             let api=&api::CLIENT;
+            //             let a:String = unikey.read().to_string();
+            //             let b=api.login_qr_check(a).await;
+            //             dbg!(b);
+            //             dbg!(api.cookie_jar());
+            //         });
+            //     },
+            //     "Click"
+            // }
         }
 
             }},
