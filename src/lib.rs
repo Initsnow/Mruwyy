@@ -1,10 +1,8 @@
 use std::{
-    sync::{Arc, Mutex, RwLock},
+    path::PathBuf, sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
-
 use chrono::{Local, TimeZone};
-
 pub fn getdate(timestamp_in_millis: i64) -> String {
     Local
         .timestamp_millis_opt(timestamp_in_millis)
@@ -13,17 +11,17 @@ pub fn getdate(timestamp_in_millis: i64) -> String {
         .format("%Y-%m-%d")
         .to_string()
 }
-
+lazy_static! {
+    static ref COOKIE_FILE : PathBuf = config_dir().unwrap().join("mruwyy/cookies.json");
+    pub static ref SONG_CACHE_DIR : PathBuf = cache_dir().unwrap().join("mruwyy/songs/");
+}
 pub mod api {
     use cookie_store::CookieStore;
     use dioxus_logger::tracing::{error, instrument};
     use lazy_static::lazy_static;
     pub use ncm_api::*;
-
-    use std::{
-        fs, io,
-        sync::{Arc, Mutex},
-    };
+    use std::{fs, io, sync::{Arc, Mutex}};
+    use crate::COOKIE_FILE;
     const BASE_URL_LIST: [&str; 12] = [
         "https://music.163.com/",
         "https://music.163.com/eapi/clientlog",
@@ -38,7 +36,6 @@ pub mod api {
         "https://music.163.com/wapi/feedback",
         "https://music.163.com/openapi/clientlog",
     ];
-    const COOKIE_FILE: &str = "cookies.json";
     const MAX_CONS: usize = 32;
     #[derive(Debug)]
     pub struct UserLike {
@@ -59,22 +56,19 @@ pub mod api {
         }
     }
     lazy_static! {
-        pub static ref CLIENT: MusicApi = client_init();
-        pub static ref LIKE_SONGS_LIST: UserLike = UserLike {
-            song: Arc::new(Mutex::new(Vec::new()))
-        };
+        pub static ref CLIENT : MusicApi = client_init(); pub static ref LIKE_SONGS_LIST
+        : UserLike = UserLike { song : Arc::new(Mutex::new(Vec::new())) };
     }
-
     fn client_init() -> MusicApi {
         if let Some(cookiejar) = load_cookie_jar_from_file() {
             return MusicApi::from_cookie_jar(cookiejar, MAX_CONS);
         }
         MusicApi::new(MAX_CONS)
     }
-
     #[instrument]
     pub fn save_cookie_jar_to_file(cookie_jar: CookieJar) {
-        match fs::File::create(COOKIE_FILE) {
+        fs::create_dir_all(COOKIE_FILE.as_path().parent().unwrap()).unwrap();
+        match fs::File::create(COOKIE_FILE.as_path()) {
             Err(err) => error!("{:?}", err),
             Ok(mut file) => {
                 let mut cookie_store = CookieStore::default();
@@ -83,15 +77,15 @@ pub mod api {
                     let url = &base_url.parse().unwrap();
                     for c in cookie_jar.get_for_uri(url) {
                         let cookie = cookie_store::Cookie::parse(
-                            format!(
-                                "{}={}; Path={}; Domain=music.163.com; Max-Age=31536000",
-                                c.name(),
-                                c.value(),
-                                url.path()
-                            ),
-                            uri,
-                        )
-                        .unwrap();
+                                format!(
+                                    "{}={}; Path={}; Domain=music.163.com; Max-Age=31536000",
+                                    c.name(),
+                                    c.value(),
+                                    url.path(),
+                                ),
+                                uri,
+                            )
+                            .unwrap();
                         cookie_store.insert(cookie, uri).unwrap();
                     }
                 }
@@ -101,124 +95,113 @@ pub mod api {
     }
     #[instrument]
     pub fn load_cookie_jar_from_file() -> Option<CookieJar> {
-        match fs::File::open(COOKIE_FILE) {
-            Err(err) => match err.kind() {
-                io::ErrorKind::NotFound => (),
-                other => error!("{:?}", other),
-            },
-            Ok(file) => match CookieStore::load_json(io::BufReader::new(file)) {
-                Err(err) => error!("{:?}", err),
-                Ok(cookie_store) => {
-                    let cookie_jar = CookieJar::default();
-                    for base_url in BASE_URL_LIST {
-                        let url = base_url.parse().unwrap();
-                        for c in cookie_store.matches(&url) {
-                            let cookie = CookieBuilder::new(c.name(), c.value())
-                                .domain("music.163.com")
-                                .path(c.path().unwrap_or("/"))
-                                .build()
-                                .unwrap();
-                            cookie_jar.set(cookie, &base_url.parse().unwrap()).unwrap();
-                        }
-                    }
-                    return Some(cookie_jar);
+        match fs::File::open(COOKIE_FILE.as_path()) {
+            Err(err) => {
+                match err.kind() {
+                    io::ErrorKind::NotFound => {}
+                    other => error!("{:?}", other),
                 }
-            },
+            }
+            Ok(file) => {
+                match CookieStore::load_json(io::BufReader::new(file)) {
+                    Err(err) => error!("{:?}", err),
+                    Ok(cookie_store) => {
+                        let cookie_jar = CookieJar::default();
+                        for base_url in BASE_URL_LIST {
+                            let url = base_url.parse().unwrap();
+                            for c in cookie_store.matches(&url) {
+                                let cookie = CookieBuilder::new(c.name(), c.value())
+                                    .domain("music.163.com")
+                                    .path(c.path().unwrap_or("/"))
+                                    .build()
+                                    .unwrap();
+                                cookie_jar.set(cookie, &base_url.parse().unwrap()).unwrap();
+                            }
+                        }
+                        return Some(cookie_jar);
+                    }
+                }
+            }
         };
         None
     }
 }
-
 pub mod play {
-
     use rodio::{Decoder, OutputStream, Sink};
     use std::time::Duration;
-
     use std::{fs::File, io::BufReader};
-
-    use crate::TIME;
-
+    use crate::{SONG_CACHE_DIR, TIME};
     pub struct Player {
         sink: Sink,
         _stream: OutputStream,
     }
-
+    impl Default for Player {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
     impl Player {
         pub fn new() -> Self {
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let sink = Sink::try_new(&stream_handle).unwrap();
             Self { sink, _stream }
         }
-
         pub fn restart(&mut self, id: u64) {
-            let file = File::open(format!("cache/{}", id)).unwrap();
+            let file = File::open(SONG_CACHE_DIR.join(id.to_string())).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
             TIME.write()
                 .unwrap()
                 .update_total(rodio::Source::total_duration(&source).unwrap());
             self.sink.stop();
             self.sink.append(source);
-
             self.sink.set_volume(0.3);
             self.play();
         }
-
         pub fn append(&self, id: u64) {
-            // let file = File::open(path).unwrap();
-            // let source = Decoder::new(BufReader::new(file)).unwrap();
-            // self.sink.append(source);
-
-            let file = File::open(format!("cache/{}", id)).unwrap();
+            let file = File::open(SONG_CACHE_DIR.join(id.to_string())).unwrap();
             let source = Decoder::new(BufReader::new(file)).unwrap();
-            dbg!(&rodio::Source::total_duration(&source));
             self.sink.append(source);
-            dbg!(self.sink.len());
         }
-
         pub fn play(&self) {
             self.sink.play();
-            TIME.write().unwrap().flash();
+            TIME.write().unwrap().resume_or_flash();
         }
-
         pub fn pause(&self) {
             self.sink.pause();
+            TIME.write().unwrap().pause();
         }
-
         pub fn stop(&self) {
             self.sink.stop();
         }
-
         pub fn set_volume(&self, volume: f32) {
             self.sink.set_volume(volume);
         }
-
         pub fn empty(&self) -> bool {
             self.sink.empty()
         }
-
         pub fn seek(&self, time: u64) {
             self.sink.try_seek(Duration::from_millis(time)).unwrap();
         }
     }
 }
-
 pub struct Time {
     pub total_time: Option<Duration>,
     pub instant: Option<Instant>,
-    //true + \ false -
     offset: (u64, bool),
+    tmp: Option<u64>,
 }
+use dirs::{cache_dir, config_dir};
 use lazy_static::lazy_static;
 lazy_static! {
-    pub static ref TIME: Arc<RwLock<Time>> = Arc::new(RwLock::new(Time::new()));
+    pub static ref TIME : Arc < RwLock < Time >> = Arc::new(RwLock::new(Time::new()));
 }
-
 impl Time {
     fn new() -> Self {
         Time {
             total_time: None,
             instant: None,
             offset: (0, false),
+            tmp: None,
         }
     }
     fn update_total(&mut self, total: Duration) {
@@ -241,22 +224,28 @@ impl Time {
         }
     }
     pub fn get_total_millis(&self) -> u64 {
-        if let Some(v) = self.total_time {
-            v.as_millis() as u64
-        } else {
-            0
-        }
+        if let Some(v) = self.total_time { v.as_millis() as u64 } else { 0 }
     }
     pub fn set(&mut self, to: u64) {
         if let Some(v) = self.instant {
             let v = v.elapsed().as_millis() as u64;
             if to >= v {
-                dbg!(to - v);
                 self.offset = (to - v, true);
             } else {
-                dbg!(v - to);
                 self.offset = (v - to, false);
             }
+        }
+    }
+    fn pause(&mut self) {
+        self.tmp = Some(self.get_current_millis());
+    }
+    fn resume_or_flash(&mut self) {
+        if let Some(v) = self.tmp {
+            self.set(v);
+            println!("resume:{}", v);
+            self.tmp = None;
+        } else {
+            self.flash();
         }
     }
 }

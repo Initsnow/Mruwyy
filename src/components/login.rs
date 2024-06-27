@@ -7,7 +7,6 @@ use qrcode_generator;
 use std::error::Error;
 use std::sync::RwLock;
 use std::time::Duration;
-
 #[component]
 pub fn LoginWithUsernameAndPwd() -> Element {
     rsx! {
@@ -30,7 +29,7 @@ pub fn LoginWithUsernameAndPwd() -> Element {
                                 data.values().get("pwd").unwrap().as_value(),
                             )
                             .await;
-                        dbg!(result);
+                        dbg!(result.unwrap());
                         dbg!(api.cookie_jar());
                     });
                 },
@@ -58,11 +57,23 @@ fn checkLogin(mut error: Signal<Option<String>>) {
             Ok(login_info) => {
                 dbg!(&login_info);
                 save_cookie_jar_to_file(api.cookie_jar().unwrap().to_owned());
+                let t = api
+                    .user_song_list(login_info.uid, 0, 100)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .filter(|e| {
+                        e.name.contains("喜欢的音乐")
+                            && &e.author == &login_info.nickname
+                    })
+                    .map(|x| x.id)
+                    .collect::<Vec<u64>>()[0];
                 let mut status = use_context::<Signal<RwLock<crate::Status>>>();
                 status.write().write().unwrap().login = Some(AccountInfo {
                     name: login_info.nickname,
                     uid: login_info.uid,
                     avatar_url: login_info.avatar_url,
+                    favorite_list_id: t,
                 });
                 navigator().replace(Route::AccountDetail {});
                 *error.write() = None;
@@ -74,9 +85,10 @@ fn checkLogin(mut error: Signal<Option<String>>) {
 #[component]
 pub fn Login() -> Element {
     let error = use_signal(|| None);
-    rsx!(LoginWithQrcode { error })
+    rsx!(
+        LoginWithQrcode { error }
+    )
 }
-
 #[component]
 pub fn LoginWithQrcode(error: Signal<Option<String>>) -> Element {
     if let Some(e) = error() {
@@ -105,47 +117,20 @@ pub fn LoginWithQrcode(error: Signal<Option<String>>) -> Element {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         });
-        Ok(qrcode_generator::to_svg_to_string(
-            a,
-            qrcode_generator::QrCodeEcc::Low,
-            140,
-            Some("wyy"),
+        Ok(
+            qrcode_generator::to_svg_to_string(
+                    a,
+                    qrcode_generator::QrCodeEcc::Low,
+                    140,
+                    Some("wyy"),
+                )
+                .unwrap(),
         )
-        .unwrap())
     });
-
     rsx! {
-        match &*future.read() {
-            Some(Ok(response)) => {
-                // dbg!(&response);
-            rsx!{
-                div { class: "login_container",
-            div{class:"qrcode_container",dangerous_inner_html:"{response}"},
-            p{
-                "{qrmsg.read()}"
-            }
-            button{
-                onclick: move |event| {
-                    spawn(async move {
-                        println!("Clicked! {event:?}");
-                        let api=&api::CLIENT;
-                        let a:String = unikey.read().to_string();
-                        let b=api.login_qr_check(a).await;
-                        dbg!(b);
-                        dbg!(api.cookie_jar());
-                    });
-                },
-                "Click"
-            }
-        }
-
-            }},
-            Some(Err(e)) => rsx!{
-                p {"Error: {e}"}
-            },
-            None => rsx!{
-                Loading {}
-            }
-        }
+        match &* future.read() { Some(Ok(response)) => { rsx! { div { class :
+        "login_container", div { class : "qrcode_container", dangerous_inner_html :
+        "{response}" }, p { "{qrmsg.read()}" } } } }, Some(Err(e)) => rsx! { p {
+        "Error: {e}" } }, None => rsx! { Loading {} } }
     }
 }

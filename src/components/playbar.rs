@@ -1,12 +1,14 @@
 use crate::components::icons::Icon;
+use crate::components::loading::Loading;
 use crate::{Play, PlayMode, Route};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use lib::api;
 use lib::play::Player;
 use lib::TIME;
+use lib::{api, SONG_CACHE_DIR};
 use ncm_api::SongInfo;
 use rand::Rng;
+use regex::Regex;
 use std::error::Error;
 use std::fs::{self, File};
 use std::io::Write;
@@ -15,17 +17,15 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tokio::time::sleep;
-
+use tracing::{error, info, span};
 pub enum PlayAction {
     Start,
     Next,
     Previous,
     Pause,
     Resume,
-    Stop,
     SetVolume(f32),
 }
-
 pub enum Timer {
     Start,
     Pause,
@@ -33,64 +33,67 @@ pub enum Timer {
     Set(u64),
     SetTime(u64),
 }
-
 #[component]
 pub fn PlayBar() -> Element {
     let playdata = use_context::<Signal<RwLock<crate::Play>>>();
     let player = Arc::new(RwLock::new(Player::new()));
+    let mut lyric_show = use_signal(|| false);
     let time = use_signal_sync(|| (0, 0));
-    let timer_coroutine_handle: Coroutine<Timer> =
-        use_coroutine(|mut rx: UnboundedReceiver<Timer>| {
-            let mut time: Signal<(u64, u64), SyncStorage> = time.clone();
-            let player = player.clone();
-            let flag = Arc::new(Mutex::new(false));
-            let flag1 = flag.clone();
-            let player_clone = player.clone();
-            async move {
-                spawn(async move {
-                    let mut time = time.to_owned();
-                    loop {
-                        if *flag1.lock().unwrap() {
-                            time.write().1 = TIME.read().unwrap().get_total_millis();
-                            time.write().0 = TIME.read().unwrap().get_current_millis();
-                            sleep(Duration::from_secs_f32(0.3)).await;
-                        } else {
-                            sleep(Duration::from_secs_f32(0.5)).await;
-                        }
+    let timer_coroutine_handle: Coroutine<Timer> = use_coroutine(|
+        mut rx: UnboundedReceiver<Timer>|
+    {
+        let mut time: Signal<(u64, u64), SyncStorage> = time;
+        let player = player.clone();
+        let flag = Arc::new(Mutex::new(false));
+        let flag1 = flag.clone();
+        let player_clone = player.clone();
+        async move {
+            spawn(async move {
+                let mut time = time.to_owned();
+                loop {
+                    if *flag1.lock().unwrap() {
+                        time.write().1 = TIME.read().unwrap().get_total_millis();
+                        time.write().0 = TIME.read().unwrap().get_current_millis();
+                        sleep(Duration::from_secs_f32(0.1)).await;
+                    } else {
+                        sleep(Duration::from_secs_f32(0.5)).await;
                     }
-                });
-
-                while let Some(msg) = rx.next().await {
-                    match msg {
-                        Timer::Start => {
-                            *flag.lock().unwrap() = true;
-                        }
-                        Timer::Stop => {
-                            *flag.lock().unwrap() = false;
-                            time.write().0 = 0;
-                        }
-                        Timer::Pause => {
-                            *flag.lock().unwrap() = false;
-                        }
-                        Timer::SetTime(t) => {
-                            time.write().0 = t;
-                            TIME.write().unwrap().set(t);
-                        }
-                        Timer::Set(t) => {
-                            time.write().0 = t;
-                            TIME.write().unwrap().set(t);
-                            player_clone.read().unwrap().seek(t);
-                        }
+                }
+            });
+            while let Some(msg) = rx.next().await {
+                match msg {
+                    Timer::Start => {
+                        *flag.lock().unwrap() = true;
+                        dbg!("start");
+                    }
+                    Timer::Stop => {
+                        *flag.lock().unwrap() = false;
+                        time.write().0 = 0;
+                        dbg!("stop");
+                    }
+                    Timer::Pause => {
+                        *flag.lock().unwrap() = false;
+                        dbg!("pause");
+                    }
+                    Timer::SetTime(t) => {
+                        time.write().0 = t;
+                        dbg!("settime", t);
+                        TIME.write().unwrap().set(t);
+                    }
+                    Timer::Set(t) => {
+                        time.write().0 = t;
+                        dbg!("set", t);
+                        TIME.write().unwrap().set(t);
+                        player_clone.read().unwrap().seek(t);
                     }
                 }
             }
-        });
-
+        }
+    });
     let play_coroutine_handle = use_coroutine(|mut rx: UnboundedReceiver<PlayAction>| {
         let playdata = playdata.to_owned();
         let player_clone = player.clone();
         let player_clone_ = player.clone();
-
         async move {
             spawn(async move {
                 loop {
@@ -98,57 +101,51 @@ pub fn PlayBar() -> Element {
                         && playdata.read().try_read().unwrap().deref().play_flag
                     {
                         handle_play_action_next(
-                            playdata.clone(),
-                            player_clone_.clone(),
-                            timer_coroutine_handle.clone(),
-                        )
-                        .await;
+                                playdata,
+                                player_clone_.clone(),
+                                timer_coroutine_handle,
+                            )
+                            .await;
                     }
                     sleep(Duration::from_secs(1)).await;
                 }
             });
-
             while let Some(msg) = rx.next().await {
                 match msg {
                     PlayAction::Start => {
                         handle_play_action_start(
-                            playdata.clone(),
-                            player_clone.clone(),
-                            timer_coroutine_handle.clone(),
-                        )
-                        .await;
+                                playdata,
+                                player_clone.clone(),
+                                timer_coroutine_handle,
+                            )
+                            .await;
                     }
                     PlayAction::Pause => {
                         player_clone.read().unwrap().pause();
-                        update_play_flag(playdata.clone(), false).await;
+                        update_play_flag(playdata, false).await;
                         timer_coroutine_handle.clone().send(Timer::Pause);
                     }
                     PlayAction::Resume => {
                         player_clone.read().unwrap().play();
-                        update_play_flag(playdata.clone(), true).await;
+                        update_play_flag(playdata, true).await;
                         timer_coroutine_handle.clone().send(Timer::Start);
-                    }
-                    PlayAction::Stop => {
-                        player_clone.read().unwrap().stop();
-                        update_play_flag(playdata.clone(), false).await;
-                        timer_coroutine_handle.clone().send(Timer::Stop);
                     }
                     PlayAction::Next => {
                         dbg!("Next?");
                         handle_play_action_next(
-                            playdata.clone(),
-                            player_clone.clone(),
-                            timer_coroutine_handle.clone(),
-                        )
-                        .await;
+                                playdata,
+                                player_clone.clone(),
+                                timer_coroutine_handle,
+                            )
+                            .await;
                     }
                     PlayAction::Previous => {
                         handle_play_action_previous(
-                            playdata.clone(),
-                            player_clone.clone(),
-                            timer_coroutine_handle.clone(),
-                        )
-                        .await;
+                                playdata,
+                                player_clone.clone(),
+                                timer_coroutine_handle,
+                            )
+                            .await;
                     }
                     PlayAction::SetVolume(v) => {
                         player_clone.read().unwrap().set_volume(v);
@@ -191,19 +188,278 @@ pub fn PlayBar() -> Element {
             sleep(Duration::from_secs(1)).await;
         }
     }
+    struct Lyrics {
+        /// 歌词
+        pub lyric: Vec<(u64, u64, String)>,
+        /// 歌词翻译
+        pub tlyric: Option<Vec<String>>,
+        /// 逐字歌词
+        /// 罗马字
+        pub romalrc: Option<Vec<String>>,
+    }
+    fn get_lrc_millis(text: &str) -> Option<u64> {
+        let re = Regex::new(r"^\[(\d{2}):(\d{2})\.(\d{1,3})\]").unwrap();
+        if let Some(captures) = re.captures(text) {
+            let minutes: u64 = captures[1].parse().unwrap();
+            let seconds: u64 = captures[2].parse().unwrap();
+            let milliseconds: u64 = format!("{:0<3}", &captures[3]).parse().unwrap();
+            let total_milliseconds = (minutes * 60 * 1000) + (seconds * 1000)
+                + milliseconds;
+            Some(total_milliseconds)
+        } else {
+            None
+        }
+    }
+    fn progress_lrc(text: &str) -> Option<(u64, String)> {
+        let re = Regex::new(r"^\[(\d{2}):(\d{2})\.(\d{1,3})\]").unwrap();
+        get_lrc_millis(text).map(|rd| (rd, re.replace(text, "").to_string()))
+    }
+    fn replace_lrc(text: String) -> Option<String> {
+        let re = Regex::new(r"^\[(\d{2}):(\d{2})\.(\d{1,3})\]").unwrap();
+        if re.is_match(&text) { Some(re.replace(&text, "").to_string()) } else { None }
+    }
     if let Some(s) = current_song {
-        let SongInfo {
-            name,
-            pic_url,
-            singer,
-            ..
-        } = s;
-
-        let time = time.clone();
+        let SongInfo { name, pic_url, singer, id, .. } = s;
+        let time = time;
         let likesongs = &api::LIKE_SONGS_LIST;
-
         let volume = playdata.read().read().unwrap().volume;
+        let totaltime = time.read().1;
+        let lyric_future = use_resource(
+            use_reactive!(
+                | (totaltime) | async move { let api = & api::CLIENT; let result = api
+                .song_lyric_new(id). await; match result { Ok(v) => { let mut tmp : Vec <
+                (u64, String) > = Vec::new(); for i in v.lyric { if let Some(v) =
+                progress_lrc(& i) { tmp.push(v); } } let mut vec : Vec < (u64, u64,
+                String) > = Vec::new(); let tmp = tmp.into_iter().collect::< Vec < (u64,
+                String) >> (); for (index, v) in tmp.iter().enumerate() { if index == 0 {
+                let tv = tmp[index + 1].0; vec.push((v.0, tv, v.1.clone())); } else { let
+                tv = if index + 1 >= tmp.len() { totaltime } else { tmp[index + 1].0 };
+                vec.push((v.0, tv, v.1.clone())); } } Ok(Lyrics { lyric : vec, tlyric : v
+                .tlyric.map(| v | v.into_iter().filter_map(replace_lrc).collect::< Vec <
+                _ >> ()), romalrc : v.romalrc.map(| v | v.into_iter()
+                .filter_map(replace_lrc).collect::< Vec < _ >> ()), }) } Err(err) =>
+                Err(err), } }
+            ),
+        );
         rsx! {
+            if *lyric_show.read() {
+                div { id: "lyric_container",
+                    div { class: "left",
+                        img { class: "song_cover", src: "{pic_url}" }
+                        div { class: "control",
+                            div { class: "top",
+                                div { class: "title&singer",
+                                    h4 { "{name}" }
+                                    Link {
+                                        class: "singer",
+                                        to: Route::SingerDetail {
+                                            singer_name: singer.clone(),
+                                        },
+                                        "{singer}"
+                                    }
+                                }
+                                div { class: "volume_controls",
+                                    if playdata.read().read().unwrap().mute {
+                                        button {
+                                            onclick: move |_| async move {
+                                                play_coroutine_handle.send(PlayAction::SetVolume(volume));
+                                                changeMute(playdata.to_owned(), false).await;
+                                            },
+                                            Icon { name: "no_sound" }
+                                        }
+                                    } else {
+                                        if volume >= 0.5 {
+                                            button {
+                                                onclick: move |_| async move {
+                                                    play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                                    changeMute(playdata.to_owned(), true).await;
+                                                },
+                                                Icon { name: "volume_up" }
+                                            }
+                                        } else {
+                                            button {
+                                                onclick: move |_| async move {
+                                                    play_coroutine_handle.send(PlayAction::SetVolume(0.0));
+                                                    changeMute(playdata.to_owned(), true).await;
+                                                },
+                                                Icon { name: "volume_down" }
+                                            }
+                                        }
+                                    }
+                                    div { class: "volume_container",
+                                        input {
+                                            r#type: "range",
+                                            id: "volume",
+                                            max: "1",
+                                            step: "0.01",
+                                            value: "{volume}",
+                                            oninput: move |e| async move {
+                                                play_coroutine_handle.send(PlayAction::SetVolume(e.value().parse().unwrap()));
+                                                changeVolume(playdata.to_owned(), e.value().parse().unwrap()).await;
+                                            }
+                                        }
+                                        div {
+                                            class: "volume",
+                                            left: "{volume * 100.0}%",
+                                            "{volume * 100.0:.0}"
+                                        }
+                                    }
+                                }
+                                if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
+                                    button {
+                                        onclick: move |_| async move {
+                                            let api = &api::CLIENT;
+                                            let currentsongid = playdata
+                                                .read()
+                                                .read()
+                                                .unwrap()
+                                                .to_owned()
+                                                .play_current_id
+                                                .unwrap();
+                                            let r = api.like(false, currentsongid).await;
+                                            if r {
+                                                likesongs.remove(currentsongid).await;
+                                            }
+                                        },
+                                        Icon { name: "favorite_fill" }
+                                    }
+                                } else {
+                                    button {
+                                        onclick: move |_| async move {
+                                            let api = &api::CLIENT;
+                                            let currentsongid = playdata
+                                                .read()
+                                                .read()
+                                                .unwrap()
+                                                .to_owned()
+                                                .play_current_id
+                                                .unwrap();
+                                            let r = api.like(true, currentsongid).await;
+                                            if r {
+                                                likesongs.add(currentsongid).await;
+                                            }
+                                        },
+                                        Icon { name: "favorite" }
+                                    }
+                                }
+                            }
+                            div { class: "progress",
+                                if time.read().1 != 0 {
+                                    div { class: "time",
+                                        "{time.read().0 / 1000 / 60}:{time.read().0 / 1000 % 60:02}"
+                                    }
+                                }
+                                input {
+                                    r#type: "range",
+                                    id: "progress",
+                                    max: "{time.read().1}",
+                                    value: "{time.read().0}",
+                                    step: 1000,
+                                    oninput: move |e| {
+                                        use_coroutine_handle::<Timer>().send(Timer::SetTime(e.value().parse().unwrap()));
+                                    },
+                                    onchange: move |e| {
+                                        use_coroutine_handle::<Timer>().send(Timer::Set(e.value().parse().unwrap()));
+                                    }
+                                }
+                                if time.read().1 != 0 {
+                                    div { class: "time",
+                                        "{time.read().1 / 1000 / 60}:{time.read().1 / 1000 % 60:02}"
+                                    }
+                                }
+                            }
+                            div { class: "mediacontrol",
+                                if playdata.read().read().unwrap().mode == PlayMode::Normal {
+                                    button {
+                                        onclick: move |_| async move {
+                                            changeMode(playdata.to_owned(), PlayMode::Loop).await;
+                                        },
+                                        Icon { name: "repeat" }
+                                    }
+                                } else if playdata.read().read().unwrap().mode == PlayMode::Loop {
+                                    button {
+                                        onclick: move |_| async move {
+                                            changeMode(playdata.to_owned(), PlayMode::Single).await;
+                                        },
+                                        Icon { name: "repeat_on" }
+                                    }
+                                } else if playdata.read().read().unwrap().mode == PlayMode::Single {
+                                    button {
+                                        onclick: move |_| async move {
+                                            changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                        },
+                                        Icon { name: "repeat_one_on" }
+                                    }
+                                }
+                                div { class: "middle",
+                                    button { onclick: move |_| play_coroutine_handle.send(PlayAction::Previous),
+                                        Icon { name: "skip_previous" }
+                                    }
+                                    if playdata.read().read().unwrap().play_flag {
+                                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Pause),
+                                            Icon { name: "pause" }
+                                        }
+                                    } else {
+                                        button { onclick: move |_| play_coroutine_handle.send(PlayAction::Resume),
+                                            Icon { name: "play_arrow" }
+                                        }
+                                    }
+                                    button { onclick: move |_| play_coroutine_handle.send(PlayAction::Next),
+                                        Icon { name: "skip_next" }
+                                    }
+                                }
+                                if playdata.read().read().unwrap().mode == PlayMode::Random {
+                                    button {
+                                        onclick: move |_| async move {
+                                            changeMode(playdata.to_owned(), PlayMode::Normal).await;
+                                        },
+                                        Icon { name: "shuffle_on" }
+                                    }
+                                } else {
+                                    button {
+                                        onclick: move |_| async move {
+                                            changeMode(playdata.to_owned(), PlayMode::Random).await;
+                                        },
+                                        Icon { name: "shuffle" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div { class: "right",
+                        div { id: "lyrics",
+                            match &* lyric_future.read() { Some(Ok(response)) => rsx! { for (index,
+                            lyric) in response.lyric.clone().into_iter().enumerate() { div { id :
+                            "line{index}", class : if lyric.0 <= time.read().0 && time.read().0 < lyric.1
+                            { { let eval =
+                            eval(r#"
+                                                                let msg = await dioxus.recv();
+                                                                document.getElementById(msg).scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                                                "#,);
+                            eval.send(format!("line{}", index) .into()).unwrap(); } "line highlight" }
+                            else { "line" }, onclick : move | _ | async move { use_coroutine_handle::<
+                            Timer > ().send(Timer::Set(lyric.0)); }, div { class : "content", if response
+                            .romalrc.is_some() { span { class : "romaji",
+                            "{response.romalrc.as_ref().unwrap()[index]}" } br {} } span { "{lyric.2}" }
+                            if response.tlyric.is_some() { br {} span { class : "translation",
+                            "{response.tlyric.as_ref().unwrap()[index]}" } } } } } }, Some(Err(e)) =>
+                            rsx! { p { "Error: {e}" } }, None => rsx! { Loading {} } }
+                        }
+                    }
+                    div { class: "close",
+                        button {
+                            onclick: move |_| async move {
+                                lyric_show.set(false);
+                            },
+                            Icon { name: "arrow down" }
+                        }
+                    }
+                    div {
+                        class: "background",
+                        background: "url({pic_url}) no-repeat center top"
+                    }
+                }
+            }
             Outlet::<crate::Route> {}
             div { id: "playbar", class: "acrylic",
                 input {
@@ -239,43 +495,41 @@ pub fn PlayBar() -> Element {
                                 "{singer}"
                             }
                         }
-                        div { class: "control",
-                            if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
-                                div {
-                                    onclick: move |_| async move {
-                                        let api = &api::CLIENT;
-                                        let currentsongid = playdata
-                                            .read()
-                                            .read()
-                                            .unwrap()
-                                            .to_owned()
-                                            .play_current_id
-                                            .unwrap();
-                                        let r = api.like(false, currentsongid).await;
-                                        if r {
-                                            likesongs.remove(currentsongid).await;
-                                        }
-                                    },
-                                    Icon { name: "favorite_fill" }
-                                }
-                            } else {
-                                div {
-                                    onclick: move |_| async move {
-                                        let api = &api::CLIENT;
-                                        let currentsongid = playdata
-                                            .read()
-                                            .read()
-                                            .unwrap()
-                                            .to_owned()
-                                            .play_current_id
-                                            .unwrap();
-                                        let r = api.like(true, currentsongid).await;
-                                        if r {
-                                            likesongs.add(currentsongid).await;
-                                        }
-                                    },
-                                    Icon { name: "favorite" }
-                                }
+                        if likesongs.check(playdata.read().read().unwrap().to_owned().play_current_id.unwrap()) {
+                            button {
+                                onclick: move |_| async move {
+                                    let api = &api::CLIENT;
+                                    let currentsongid = playdata
+                                        .read()
+                                        .read()
+                                        .unwrap()
+                                        .to_owned()
+                                        .play_current_id
+                                        .unwrap();
+                                    let r = api.like(false, currentsongid).await;
+                                    if r {
+                                        likesongs.remove(currentsongid).await;
+                                    }
+                                },
+                                Icon { name: "favorite_fill" }
+                            }
+                        } else {
+                            button {
+                                onclick: move |_| async move {
+                                    let api = &api::CLIENT;
+                                    let currentsongid = playdata
+                                        .read()
+                                        .read()
+                                        .unwrap()
+                                        .to_owned()
+                                        .play_current_id
+                                        .unwrap();
+                                    let r = api.like(true, currentsongid).await;
+                                    if r {
+                                        likesongs.add(currentsongid).await;
+                                    }
+                                },
+                                Icon { name: "favorite" }
                             }
                         }
                     }
@@ -298,7 +552,6 @@ pub fn PlayBar() -> Element {
                     }
                     div { class: "container",
                         button {
-                            //change to Link
                             Link { to: Route::PlayList {},
                                 Icon { name: "queue_music" }
                             }
@@ -340,7 +593,6 @@ pub fn PlayBar() -> Element {
                                 Icon { name: "shuffle" }
                             }
                         }
-
                         div { class: "volume_controls",
                             if playdata.read().read().unwrap().mute {
                                 button {
@@ -388,6 +640,12 @@ pub fn PlayBar() -> Element {
                                 }
                             }
                         }
+                        button {
+                            onclick: move |_| async move {
+                                lyric_show.set(true);
+                            },
+                            Icon { name: "arrow up" }
+                        }
                     }
                 }
             }
@@ -398,45 +656,41 @@ pub fn PlayBar() -> Element {
         }
     }
 }
-
 async fn handle_play_action_start(
     playdata: Signal<RwLock<crate::Play>>,
     player: Arc<RwLock<Player>>,
     timer_coroutine_handle: Coroutine<Timer>,
 ) {
+    let span = span!(tracing::Level::INFO, "handle_play_action_start");
+    let _enter = span.enter();
     let currentid;
     {
         let play = playdata.read().read().unwrap().to_owned();
-        if let Play {
-            play_current_id: Some(id),
-            ..
-        } = play
-        {
+        if let Play { play_current_id: Some(id), .. } = play {
             currentid = id;
         } else {
-            return; // Exit early if play_current_id is None
+            return;
         }
     }
     if check_cache(currentid) {
         player.write().unwrap().restart(currentid);
         timer_coroutine_handle.send(Timer::Stop);
         timer_coroutine_handle.send(Timer::Start);
-        update_play_flag(playdata.clone(), true).await;
+        update_play_flag(playdata, true).await;
     } else {
         match download(currentid).await {
             Ok(_) => {
                 player.write().unwrap().restart(currentid);
                 timer_coroutine_handle.send(Timer::Start);
-                update_play_flag(playdata.clone(), true).await;
-                preload(playdata.clone()).await;
+                update_play_flag(playdata, true).await;
+                preload(playdata).await;
             }
             Err(e) => {
-                dbg!(e);
+                error!(e);
             }
         }
     }
 }
-
 async fn handle_play_action_next(
     playdata: Signal<RwLock<crate::Play>>,
     player: Arc<RwLock<Player>>,
@@ -452,34 +706,28 @@ async fn handle_play_action_next(
             play_list: Some(tracklist),
             mode,
             ..
-        } = play
-        {
+        } = play {
             currentid = current;
             tracks = tracklist;
             playmode = mode;
         } else {
-            return; // Exit early if any of the required fields are None
+            return;
         }
     }
-
     let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
     match playmode {
         PlayMode::Normal => {
             let index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
             if index >= playlist.len() {
                 player.write().unwrap().stop();
-                update_play_flag(playdata.clone(), false).await;
+                update_play_flag(playdata, false).await;
                 timer_coroutine_handle.clone().send(Timer::Stop);
                 return;
             }
             let id = playlist[index];
-            update_current_id(playdata.clone(), id).await;
-            handle_play_action_start(
-                playdata.clone(),
-                player.clone(),
-                timer_coroutine_handle.clone(),
-            )
-            .await;
+            update_current_id(playdata, id).await;
+            handle_play_action_start(playdata, player.clone(), timer_coroutine_handle)
+                .await;
         }
         PlayMode::Loop => {
             let mut index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
@@ -487,40 +735,27 @@ async fn handle_play_action_next(
                 index = 0;
             }
             let id = playlist[index];
-            update_current_id(playdata.clone(), id).await;
-            handle_play_action_start(
-                playdata.clone(),
-                player.clone(),
-                timer_coroutine_handle.clone(),
-            )
-            .await;
+            update_current_id(playdata, id).await;
+            handle_play_action_start(playdata, player.clone(), timer_coroutine_handle)
+                .await;
         }
         PlayMode::Random => {
             let mut rng = rand::thread_rng();
             let index = rng.gen_range(0..playlist.len());
             let id = playlist[index];
-            update_current_id(playdata.clone(), id).await;
-            handle_play_action_start(
-                playdata.clone(),
-                player.clone(),
-                timer_coroutine_handle.clone(),
-            )
-            .await;
+            update_current_id(playdata, id).await;
+            handle_play_action_start(playdata, player.clone(), timer_coroutine_handle)
+                .await;
         }
         PlayMode::Single => {
             let index = playlist.iter().position(|&e| e == currentid).unwrap();
             let id = playlist[index];
-            update_current_id(playdata.clone(), id).await;
-            handle_play_action_start(
-                playdata.clone(),
-                player.clone(),
-                timer_coroutine_handle.clone(),
-            )
-            .await;
+            update_current_id(playdata, id).await;
+            handle_play_action_start(playdata, player.clone(), timer_coroutine_handle)
+                .await;
         }
     }
 }
-
 async fn handle_play_action_previous(
     playdata: Signal<RwLock<crate::Play>>,
     player: Arc<RwLock<Player>>,
@@ -536,16 +771,14 @@ async fn handle_play_action_previous(
             play_list: Some(tracklist),
             mode,
             ..
-        } = play
-        {
+        } = play {
             currentid = current;
             tracks = tracklist;
             playmode = mode;
         } else {
-            return; // Exit early if any of the required fields are None
+            return;
         }
     }
-
     let playlist: Vec<u64> = tracks.iter().map(|e| e.id).collect();
     match playmode {
         PlayMode::Normal => {
@@ -553,42 +786,30 @@ async fn handle_play_action_previous(
             dbg!(currentindex);
             if currentindex == 0 {
                 player.write().unwrap().stop();
-                update_play_flag(playdata.clone(), false).await;
+                update_play_flag(playdata, false).await;
                 timer_coroutine_handle.clone().send(Timer::Stop);
                 return;
             }
             let index = currentindex - 1;
             let id = playlist[index];
             dbg!(id, index);
-            update_current_id(playdata.clone(), id).await;
-            handle_play_action_start(
-                playdata.clone(),
-                player.clone(),
-                timer_coroutine_handle.clone(),
-            )
-            .await;
+            update_current_id(playdata, id).await;
+            handle_play_action_start(playdata, player.clone(), timer_coroutine_handle)
+                .await;
         }
-        PlayMode::Random => {
-            // Implement Random mode handling if needed
-        }
-        _ => {
-            // Handle other play modes if needed
-        }
+        PlayMode::Random => {}
+        _ => {}
     }
 }
-
 fn check_cache(id: u64) -> bool {
-    Path::new(&format!("cache/{}", id)).exists()
+    Path::new(&SONG_CACHE_DIR.join(id.to_string())).exists()
 }
-
 async fn download(id: u64) -> Result<(), Box<dyn Error>> {
     let api = &api::CLIENT;
-    let url = api.songs_url(&[id], "12800").await.unwrap()[0]
-        .url
-        .to_owned();
+    let url = api.songs_url_v1(&[id], "jymaster").await.unwrap()[0].url.to_owned();
     let response = reqwest::get(url).await?;
-    fs::create_dir_all("cache/")?;
-    let mut file = File::create(format!("cache/{}", id))?;
+    fs::create_dir_all(SONG_CACHE_DIR.as_path())?;
+    let mut file = File::create(SONG_CACHE_DIR.join(id.to_string()))?;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
@@ -596,7 +817,6 @@ async fn download(id: u64) -> Result<(), Box<dyn Error>> {
     }
     Ok(())
 }
-
 async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
     if let Play {
         play_current_id: Some(currentid),
@@ -611,7 +831,6 @@ async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
             PlayMode::Normal => {
                 let index = playlist.iter().position(|&e| e == currentid).unwrap() + 1;
                 let end_index = index + preload_limit;
-
                 let slice = if end_index >= playlist.len() {
                     let end_index = end_index % playlist.len();
                     let mut new_slice = Vec::new();
@@ -621,17 +840,16 @@ async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
                 } else {
                     playlist[index..end_index].to_vec()
                 };
-
                 for e in slice.clone() {
                     if check_cache(e) {
-                        dbg!("预加载 {} 成功，击中缓存", e);
+                        info!("预加载 {} 成功，击中缓存", e);
                     } else {
                         match download(e).await {
                             Ok(_) => {
-                                dbg!("预加载 {} 成功，成功下载", e);
+                                info!("预加载 {} 成功，成功下载", e);
                             }
                             Err(err) => {
-                                dbg!(err);
+                                error!(err);
                             }
                         }
                     }
@@ -645,7 +863,6 @@ async fn preload(playdata: Signal<RwLock<crate::Play>>) -> Vec<u64> {
         Vec::new()
     }
 }
-
 async fn update_play_flag(mut playdata: Signal<RwLock<crate::Play>>, flag: bool) {
     loop {
         if let Ok(p) = playdata.try_write() {
@@ -657,7 +874,6 @@ async fn update_play_flag(mut playdata: Signal<RwLock<crate::Play>>, flag: bool)
         sleep(Duration::from_secs(1)).await;
     }
 }
-
 async fn update_current_id(mut playdata: Signal<RwLock<crate::Play>>, id: u64) {
     loop {
         if let Ok(p) = playdata.try_write() {
@@ -669,14 +885,8 @@ async fn update_current_id(mut playdata: Signal<RwLock<crate::Play>>, id: u64) {
         sleep(Duration::from_secs(1)).await;
     }
 }
-
 fn get_current_song(play: Play) -> Option<SongInfo> {
-    if let Play {
-        play_current_id: Some(id),
-        play_list: Some(lists),
-        ..
-    } = play
-    {
+    if let Play { play_current_id: Some(id), play_list: Some(lists), .. } = play {
         for e in lists {
             if e.id == id {
                 return Some(e);

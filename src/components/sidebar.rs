@@ -13,7 +13,7 @@ pub fn Sidebar() -> Element {
             id: "sidebar",
             "style": if playdata.read().read().unwrap().play_current_id.is_some() { "height: calc(100% - 4.1rem);" },
             class: "acrylic",
-            GoBackButton {
+            GoBackButton { 
                 Icon { name: "chevron_backward" }
             }
             form { id: "search",
@@ -37,75 +37,55 @@ pub fn Sidebar() -> Element {
                         }
                     }
                     li {
-                        Link { to: "/woc/dad",
+                        Link { to: Route::DailyRecommend {},
                             Icon { name: "calendar_today" }
                             "每日推荐"
-                        }
-                    }
-                    li {
-                        a { href: "contact.html",
-                            Icon { name: "radio" }
-                            "私人FM"
-                        }
-                    }
-                    li {
-                        a { href: "",
-                            Icon { name: "vital_sign" }
-                            "心动模式"
                         }
                     }
                 }
                 p { "音乐" }
                 ul {
+                    // li {
+                    //     a { href: "",
+                    //         Icon { name: "folder" }
+                    //         "离线音乐"
+                    //     }
+                    // }
+                    // li {
+                    //     Link { to: Route::RecentPlay{},
+                    //         Icon { name: "history" }
+                    //         "播放历史"
+                    //     }
+                    // }
                     li {
-                        a { href: "",
-                            Icon { name: "folder" }
-                            "离线音乐"
-                        }
-                    }
-                    li {
-                        a { href: "",
-                            Icon { name: "history" }
-                            "播放历史"
-                        }
-                    }
-                    li {
-                        a { href: "",
+                        Link { to: Route::Stars {},
                             Icon { name: "star" }
-                            "我的收藏"
-                        }
-                    }
-                    li {
-                        a { href: "",
-                            Icon { name: "cloud" }
-                            "我的云盘"
+                            "收藏专辑"
                         }
                     }
                 }
                 p { "歌单" }
                 ul {
+                    // li {
+                    //     a { href: "",
+                    //         Icon { name: "add" }
+                    //         "创建歌单"
+                    //     }
+                    // }
                     li {
-                        a { href: "",
-                            Icon { name: "add" }
-                            "创建歌单"
-                        }
-                    }
-                    li {
-                        a { href: "",
+                        Link {
+                            to: Route::ListDetail {
+                                songlist_id: status
+                                    .read()
+                                    .read()
+                                    .unwrap()
+                                    .login
+                                    .as_ref()
+                                    .unwrap()
+                                    .favorite_list_id,
+                            },
                             Icon { name: "favorite" }
                             "我喜欢的音乐"
-                        }
-                    }
-                    li {
-                        a { href: "",
-                            Icon { name: "list" }
-                            "我创建的歌单"
-                        }
-                    }
-                    li {
-                        a { href: "",
-                            Icon { name: "list" }
-                            "我收藏的歌单"
                         }
                     }
                 }

@@ -1,5 +1,7 @@
 :root {
     --systemThemeColor: #0078d4;
+    --color-secondary-bg-for-transparent: hsla(0, 0%, 100%, 0.08);
+    --color-text: #fff;
 }
 
 ::-webkit-scrollbar {
@@ -90,6 +92,7 @@ li a {
     padding: 0.5rem 1rem;
     color: #dfe7e8;
     text-decoration: none;
+    border-radius: 0.4375rem;
 }
 
 li a svg,
@@ -104,7 +107,6 @@ li a:hover,
     backdrop-filter: opacity(0.35);
     -webkit-backdrop-filter: opacity(0.35);
     background: #ffffff57;
-    border-radius: 0.4375rem;
     text-decoration: none;
     transition: all 0.15s;
 }
@@ -191,6 +193,11 @@ img.song_cover,
     user-select: none;
     width: 100%;
     border: 0.0625rem solid rgba(0, 0, 0, 0.04);
+}
+
+img.song_cover.album {
+    width: 3rem;
+    height: 3rem;
 }
 
 .song_list .list_name {
@@ -386,15 +393,21 @@ body {
     fill: var(--systemThemeColor);
     width: 16px;
     height: 16px;
+    transition: all 0.3s;
 }
 
 .track .like svg.false {
     opacity: 0;
 }
+.track .like:hover svg{
+    opacity: 100;
+}
+
 
 .title\&singer {
     flex: 1;
     display: flex;
+    flex-direction: column;
 }
 
 .title\&singer .container {
@@ -477,13 +490,21 @@ button.login-button {
 }
 
 button {
-    padding: 0.5rem 1rem;
-    margin: 0;
-    display: block;
-    border: none;
-    border-bottom: 0.125rem solid #000000;
-    background-color: #323232;
-    border-radius: 0.25rem;
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    margin: 4px;
+    border: 0;
+    background-color: transparent;
+    border-color: transparent;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+    border-radius: 0.5rem;
+}
+
+button:hover {
+    background: var(--color-secondary-bg-for-transparent);
 }
 
 #user_list_container {
@@ -503,14 +524,29 @@ button {
     overflow-y: auto;
     width: 50%;
     display: flex;
-    gap: 0.7rem;
+    gap: 0.2rem;
     flex-direction: column;
     overflow-x: hidden;
 }
 
 .userlist a,
 .userlist h1 {
-    padding: 0.15rem 0.4rem;
+    padding: 0.4rem 0.4rem;
+    border-radius: 0.4375rem;
+
+}
+
+.userlist.album{
+    background-size: 2rem;
+    padding: 0.4rem;
+    padding-bottom: 0;
+    background-color: #ffffff0f;
+    border-radius: 0.4rem;
+    overflow-y: auto;
+    display: flex;
+    gap: 0.2rem;
+    flex-direction: column;
+    overflow-x: hidden;
 }
 
 #user_list_container .userlist .song_cover {
@@ -546,10 +582,7 @@ button {
 .userlist a:hover {
     text-decoration: none;
     color: black;
-    backdrop-filter: opacity(0.35);
-    -webkit-backdrop-filter: opacity(0.35);
     background: #ffffff57;
-    border-radius: 0.4375rem;
     text-decoration: none;
     transition: all 0.3s;
 }
@@ -695,6 +728,7 @@ button {
     height: 32px;
     padding: 0;
     border: 0;
+    margin: 0;
     background-color: transparent;
     border-color: transparent;
     align-items: center;
@@ -725,4 +759,164 @@ button {
 
 #playlist h1 {
     margin: 0.5rem 0;
+}
+
+#lyric_container {
+    position: fixed;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    background-color: black;
+}
+
+#lyric_container *{
+    z-index: 2;
+}
+
+#lyric_container .left {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    margin: 24px 0;
+    align-items: center;
+    transition: all .5s;
+    flex-direction: column;
+}
+
+#lyric_container .song_cover {
+    width: 54vh;
+    height: 54vh;
+    border-radius: .75em;
+    -webkit-user-select: none;
+    user-select: none;
+    object-fit: cover;
+}
+
+#lyric_container .control {
+    display: flex;
+    flex-direction: column;
+    width: 54vh;
+    margin-top: 24px;
+    color: var(--color-text);
+}
+
+#lyric_container .control .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#lyric_container .control .progress {
+    margin-top: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#lyric_container .control .mediacontrol {
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+    align-items: center;
+    gap: 15px;
+}
+
+#lyric_container .control input[type="range"] {
+    width: 75%;
+}
+
+#lyric_container .volume_container input[type="range"] {
+    width: 100%;
+}
+
+#lyric_container .control .mediacontrol .middle {
+    display: flex;
+    align-items: center;
+}
+
+#lyric_container .control .mediacontrol .middle button:nth-child(2) {
+    width: 45px;
+    height: 45px;
+}
+
+#lyric_container .control .mediacontrol .middle button:nth-child(2) svg {
+    width: 45px;
+    height: 45px;
+}
+
+#lyric_container .control .mediacontrol .middle button svg {
+    width: 32px;
+    height: 32px;
+}
+
+#lyric_container .control .mediacontrol .middle button {
+    width: 36px;
+    height: 36px;
+}
+
+#lyric_container .control .mediacontrol svg {
+    width: 16px;
+    height: 16px;
+}
+
+#lyric_container .right {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: auto;
+}
+
+#lyric_container .close {
+    right: 3px;
+    position: fixed;
+}
+
+#lyric_container .background{
+    content: "";
+    position: absolute;
+    height: 100vh;
+    width: 100vw;
+    background-size: cover !important;
+    filter: blur(30px) brightness(65%) saturate(80%);
+    z-index: 0;
+}
+
+#lyric_container .line {
+    margin: 2px 0;
+    padding: 12px 18px;
+    transition: .5s;
+    border-radius: 12px;
+}
+
+#lyric_container .line:hover {
+    background: var(--color-secondary-bg-for-transparent);
+}
+
+#lyric_container .line span {
+    opacity: .28;
+}
+
+#lyric_container .line span.translation {
+    font-size: large;
+}
+
+#lyric_container .line span.romaji {
+    font-size: xx-small;
+}
+
+#lyric_container .highlight span.romaji {
+    opacity: .48;
+}
+
+#lyric_container .highlight span.translation {
+    opacity: .58;
+}
+
+#lyric_container .highlight span {
+    opacity: .98;
+}
+
+#lyric_container #lyrics {
+    font-size: x-large;
 }
