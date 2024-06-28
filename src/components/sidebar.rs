@@ -13,7 +13,7 @@ pub fn Sidebar() -> Element {
             id: "sidebar",
             "style": if playdata.read().read().unwrap().play_current_id.is_some() { "height: calc(100% - 4.1rem);" },
             class: "acrylic",
-            GoBackButton { 
+            GoBackButton {
                 Icon { name: "chevron_backward" }
             }
             form { id: "search",
@@ -72,20 +72,17 @@ pub fn Sidebar() -> Element {
                     //         "创建歌单"
                     //     }
                     // }
-                    li {
-                        Link {
-                            to: Route::ListDetail {
-                                songlist_id: status
-                                    .read()
-                                    .read()
-                                    .unwrap()
-                                    .login
-                                    .as_ref()
-                                    .unwrap()
-                                    .favorite_list_id,
-                            },
-                            Icon { name: "favorite" }
-                            "我喜欢的音乐"
+                    if let Ok(a) = status.read().read(){
+                        if let Some(b) = a.login.as_ref(){
+                            li{
+                                Link {
+                                    to: Route::ListDetail {
+                                        songlist_id: b.favorite_list_id
+                                    },
+                                    Icon { name: "favorite" }
+                                    "我喜欢的音乐"
+                                }
+                            }
                         }
                     }
                 }
